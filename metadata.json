@@ -1,0 +1,6 @@
+{
+  "name": "서로 다른 나라, 함께 사는 세계",
+  "description": "32차시 세계 여러 나라 문화 탐구 및 지구촌 당면 과제 해결을 위한 학생 맞춤형 통합 프로젝트 학습 지원 포털",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
