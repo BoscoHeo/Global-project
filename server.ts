@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
@@ -7,7 +8,24 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
+// Security Hardening: Disable Express signature header to prevent signature visibility exposure
+app.disable('x-powered-by');
+
+// Security Hardening: Content-Security-Policy (CSP) middleware to protect against Cross-Site Scripting (XSS)
+app.use((req, res, next) => {
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src 'self' https://fonts.gstatic.com; " +
+    "img-src 'self' data: https:; " +
+    "connect-src 'self' https: data:;"
+  );
+  next();
+});
 
 app.use(express.json());
 
@@ -318,6 +336,7 @@ ${countryName}
 7. quiz는 해당 국가에 특화된 풍부한 교육용 퀴즈 2가지를 출제하십시오.
    - 객관식 선택지는 4개이며, 0-indexed correctIndex 기준에 완벽히 일치해야 합니다.
    - 퀴즈 질문은 초등학생들이 기후나 역사, 지리적 원인이 녹아든 재미있는 문장이어야 합니다.
+   - 또한, 문제를 틀린 학생이 정답을 유추할 수 있도록 은유적이고 간접적인 교육적 힌트(hint) 필드를 반드시 포함시키되, 힌트 본문에 정답의 글자나 직접적인 단어가 포함되지 않도록 주의하십시오.
 
 결과는 반드시 지정된 JSON 규격으로 반환해야 합니다.`;
 
@@ -356,9 +375,10 @@ ${countryName}
                     items: { type: Type.STRING },
                     description: "상대적으로 긴 구체적인 보기 4개"
                   },
-                  correctIndex: { type: Type.INTEGER, description: "0부터 3 사이의 정답 인덱스" }
+                  correctIndex: { type: Type.INTEGER, description: "0부터 3 사이의 정답 인덱스" },
+                  hint: { type: Type.STRING, description: "정답을 직접 밝히지 않고, 우회적으로 힌트를 주어 스스로 답을 찾게 이끄는 다정한 설명 (정답 글자 포함 금지)" }
                 },
-                required: ["id", "question", "options", "correctIndex"]
+                required: ["id", "question", "options", "correctIndex", "hint"]
               },
               description: "국가별 퀴즈 2문항 세트"
             }
@@ -401,13 +421,15 @@ ${countryName}
             id: "temp-q1",
             question: `${countryName}의 전통 의복이나 음식 등이 공통적으로 가진 자연환경적 교훈과 탄생 배경은 무엇입니까?`,
             options: ["인위적 기계 문명의 억압", "기후와 자연환경 조건에 대한 인류의 지혜적인 적응 결과", "타 도시 국가에 대한 단순 모방", "물질 만능주의와 빈부격차의 극대화"],
-            correctIndex: 1
+            correctIndex: 1,
+            hint: "인간은 주어진 날씨와 지리적 특징을 극복하고 어우러지기 위해 옷과 음식을 연구해 왔답니다."
           },
           {
             id: "temp-q2",
             question: "지구촌의 다양한 문화를 배울 때 가져야 할 올바른 탐색의 태도는 무엇입니까?",
             options: ["모든 문화를 문명 서열화로 등급 매겨 무시한다", "기후, 지리, 역사가 결정지은 삶의 고유한 결을 있는 그대로 존중하고 공감한다", "오로지 내 편견에 안 맞으면 폐쇄적으로 배제한다", "문화적 충돌을 극대화시켜 전쟁의 촉매제로 쓴다"],
-            correctIndex: 1
+            correctIndex: 1,
+            hint: "상대방의 다른 생활방식이 왜 생겨났인지 그 나라의 입장에서 따뜻하게 이해하는 자세를 떠올려 보세요."
           }
         ]
       });
@@ -599,21 +621,31 @@ app.get("/api/teacher-api-key/status", (req, res) => {
 
 // Configure Vite integration or bundle
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  const distPath = path.join(process.cwd(), "dist");
+  const isProduction = process.env.NODE_ENV === "production" || fs.existsSync(path.join(distPath, "index.html"));
+
+  if (isProduction) {
+    console.log("[Express Backend] Running in PRODUCTION mode. Serving static assets from:", distPath);
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      const indexPath = path.join(distPath, "index.html");
+      res.sendFile(indexPath, (err) => {
+        if (err) {
+          console.error("Error sending index.html:", err);
+          res.status(404).send("Index.html not found. Please ensure the frontend build completed successfully.");
+        }
+      });
+    });
+  } else {
+    console.log("[Express Backend] Running in DEVELOPMENT mode. Starting Vite middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`[Express Backend] Server listening on http://localhost:${PORT}`);
   });
 }

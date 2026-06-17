@@ -34,6 +34,7 @@ export interface QuizQuestion {
   question: string;
   options: string[];
   correctIndex: number;
+  hint?: string;
 }
 
 export interface CountryInfo {

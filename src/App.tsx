@@ -45,13 +45,15 @@ const SEEDED_COUNTRIES: CountryInfo[] = [
         id: "kr-q1",
         question: "상대방을 존중하는 대한민국 전통 인사 예절에서 가장 바른 몸가짐은 무엇일까요?",
         options: ["손을 흔들며 크게 소리 지른다", "허리를 숙이고 머리를 정중히 낮추며 눈인사를 나눈다", "상대방의 양뺨을 가볍게 어루만진다", "손가락으로 상대방을 가리키며 악수한다"],
-        correctIndex: 1
+        correctIndex: 1,
+        hint: "💡 힌트: 고개를 지긋이 숙이고 허리를 정중하게 낮추어 감사를 양보하는 몸짓이 동양 정서의 대표적인 경의 표시랍니다."
       },
       {
         id: "kr-q2",
         question: "한국에서 고운 선을 자랑하는 전통 의상의 이름이자, 친환경 자연 염색으로 인기를 끄는 의복은 무엇일까요?",
         options: ["사리", "갈라베야", "카바야", "한복"],
-        correctIndex: 3
+        correctIndex: 3,
+        hint: "💡 힌트: '한국 고유의 옷'이라는 뜻이 직관적으로 녹아들어 있으며 아름다운 저고리와 치마 혹은 바지로 구성되어 있습니다."
       }
     ]
   },
@@ -60,7 +62,7 @@ const SEEDED_COUNTRIES: CountryInfo[] = [
     name: "브라질 (Brazil)",
     continent: "남아메리카 (South America)",
     flag: "🇧🇷",
-    description: "뜨거운 햇살과 이국적인 야생 삼림, 지구의 허파 아마존 및 열정적인 삼바 댄스를 보유한 다문화 공존 국가입니다.",
+    description: "뜨거운 햇살 and 이국적인 야생 삼림, 지구의 허파 아마존 및 열정적인 삼바 댄스를 보유한 다문화 공존 국가입니다.",
     highlights: {
       food: "검은색 콩과 고기를 온종일 부드럽게 끓여 풍성한 쌀밥과 곁들이는 서민 고유 영양식 '페이조아다'.",
       greeting: "가볍게 뺨을 가까이 맞대며 반가운 휘파람이나 뽀뽀 소리를 정답게 주고받습니다.",
@@ -72,13 +74,15 @@ const SEEDED_COUNTRIES: CountryInfo[] = [
         id: "br-q1",
         question: "브라질의 기후와 역사적 영양 보충 배경에서 시작되었으며, 콩과 고기를 무쇠 냄비에 끓여낸 음식의 이름은 무엇일까요?",
         options: ["타코", "빠에야", "페이조아다", "파스타"],
-        correctIndex: 2
+        correctIndex: 2,
+        hint: "💡 힌트: 포르투갈어로 '검은콩'을 뜻하는 단어에서 파생되어 영양 가득한 고기와 콩을 함께 고아 낸 브라질의 국민 요리입니다."
       },
       {
         id: "br-q2",
         question: "매년 사순절을 앞두고 리우데자네이루 등지에서 화려한 의상을 보며 세계인이 몰려드는 최대 축제는 무엇일까요?",
         options: ["토마토 축제", "원주민 부족 축제", "리오 카니발(Rio Carnival)", "나일강 감사제"],
-        correctIndex: 2
+        correctIndex: 2,
+        hint: "💡 힌트: 남미의 정열적인 삼바 리듬이 지배하는 초대형 지구촌 축제로 브라질 리우데자네이루 항구 명소에서 가장 뜨겁게 열려요."
       }
     ]
   },
@@ -99,13 +103,15 @@ const SEEDED_COUNTRIES: CountryInfo[] = [
         id: "es-q1",
         question: "지중해 햇살과 사프란의 특유 노란 향내가 배어나는 바다 해물 쌀 요리로 스페인 대표 부스 요리는?",
         options: ["빠에야(Paella)", "코샤리(Koshary)", "스파게티", "미트파이"],
-        correctIndex: 0
+        correctIndex: 0,
+        hint: "💡 힌트: '넓적한 상반 철판 팬'을 의미하는 단어에서 시라되어, 신선한 홍합과 새우, 노란 천연 향신료를 고슬하게 볶는 철판 요리입니다."
       },
       {
         id: "es-q2",
         question: "스페인 부뇰에서 매년 8월, 과잉 농산물의 나눔과 공동체 협동을 상징적으로 폭발시키는 거대 농산물 놀이 축제는?",
         options: ["옥토버페스트", "홀리 축제", "등불 축제", "토마토 축제(La Tomatina)"],
-        correctIndex: 3
+        correctIndex: 3,
+        hint: "💡 힌트: 붉고 상큼하며 지중해를 붉게 물들이는 수분이 가득한 여름 열매이자 리코펜이 풍부한 채소를 마구 던지는 장난 축제입니다."
       }
     ]
   },
@@ -126,13 +132,15 @@ const SEEDED_COUNTRIES: CountryInfo[] = [
         id: "eg-q1",
         question: "이집트의 건조한 강풍과 극심한 일사를 유익하게 방어하고 신체의 통풍을 기막히게 도와주는 전통 원피스 의복은?",
         options: ["사리", "갈라베야(Galabeya)", "블루스", "한복"],
-        correctIndex: 1
+        correctIndex: 1,
+        hint: "💡 힌트: 사막의 따가운 자외선과 차가운 밤 환경을 보강하기 위해 긴 총장과 헐렁한 실루엣을 자랑하는 한 벌 통원피스풍 직물이랍니다."
       },
       {
         id: "eg-q2",
         question: "이집트 대표 음식으로 마카로니, 쌀, 튀긴 마늘과 양파, 그리고 알싸한 붉은 소스를 대형 보울에 비벼 한 끼 식사가 되는 대중 음식은 무엇일까요?",
         options: ["코샤리(Koshary)", "김밥", "카레라이스", "타코"],
-        correctIndex: 0
+        correctIndex: 0,
+        hint: "💡 힌트: 마카로니와 렌틸콩, 프라이드 어니언 등을 상큼 매콤 토마토 양념에 비벼 푸짐하게 포만감을 전하는 든든한 서민식입니다."
       }
     ]
   },
@@ -153,13 +161,15 @@ const SEEDED_COUNTRIES: CountryInfo[] = [
         id: "in-q1",
         question: "인도에서 두 손을 모으고 깊이 상대의 영적 안식을 존중하며 주고받는 따뜻한 문명 예인(禮人)의 단 한마디는?",
         options: ["나마스테(Namaste)", "도스 베소스", "시앙시앙", "그데이"],
-        correctIndex: 0
+        correctIndex: 0,
+        hint: "💡 힌트: 요가 클래스 등에서도 명상 전후 합장하며 즐겨 선포하며, '내 내면의 숭고함이 당신의 영혼을 환히 경배합니다'라는 뜻을 안고 있습니다."
       },
       {
         id: "in-q2",
-        question: "봄을 맞아 인도 대륙 전역의 모든 이들이 계급과 묵은 미움을 격파하고 오색 꽃가루를 장난치듯 뒤집어쓰며 노는 봄 축제는?",
+        question: "봄을 맞아 인도 대륙 전역 of 모든 이들이 계급과 묵은 미움을 격파하고 오색 꽃가루를 장난치듯 뒤집어쓰며 노는 봄 축제는?",
         options: ["추석", "홀리 축제(Holi)", "리우 삼바 축제", "와파 엘 닐"],
-        correctIndex: 1
+        correctIndex: 1,
+        hint: "💡 힌트: 신분과 성별을 초월해 온 동네가 총천연색 물총과 가루 분말로 물드는 봄맞이 카니발입니다."
       }
     ]
   },
@@ -180,13 +190,15 @@ const SEEDED_COUNTRIES: CountryInfo[] = [
         id: "au-q1",
         question: "호주의 광활한 목축 기후와 광업 기원으로, 광부들이 고기를 가볍게 감싸 휴대하여 에너지 보충용으로 즐긴 바삭한 파이의 정체는 무엇입니까?",
         options: ["미트 라이스", "코샤리", "미트 파이(Meat Pie)", "빠에야"],
-        correctIndex: 2
+        correctIndex: 2,
+        hint: "💡 힌트: 바게트나 도우가 아닌 바삭한 생지 페이스트리 시트 안에 다져 볶은 육즙 쇠고기를 알차게 채운 든든한 소형 구이 식사입니다."
       },
       {
         id: "au-q2",
         question: "오세아니아 호주에서 뜨거운 여름 새해를 극적이면서도 낭만 넘치는 음악과 우렁찬 축복 불꽃 쇼로 맞이하는 글로벌 스케일 축제는?",
         options: ["추석 한가위", "시드니 신년 불꽃축제", "토마토 전쟁", "삼바 축제"],
-        correctIndex: 1
+        correctIndex: 1,
+        hint: "💡 힌트: 12월 31일의 따사로운 해변 여름밤, 시드니 랜드마크 랜드브릿지와 아름다운 백스텝 오라하우스 하늘을 환상적인 은가루로 꾸미는 랜드마크 축제입니다."
       }
     ]
   }
@@ -363,6 +375,10 @@ export default function App() {
   const [quizScores, setQuizScores] = useState<number>(0);
   const [quizFeedbackText, setQuizFeedbackText] = useState<string>("");
   const [showQuizModal, setShowQuizModal] = useState<boolean>(false);
+  const [attemptedWrongOptions, setAttemptedWrongOptions] = useState<number[]>([]);
+  const [isQuizQuestionSolved, setIsQuizQuestionSolved] = useState<boolean>(false);
+  const [isFirstAttempt, setIsFirstAttempt] = useState<boolean>(true);
+  const [isQuizFinished, setIsQuizFinished] = useState<boolean>(false);
   const [expoBoothLayout, setExpoBoothLayout] = useState<{ [key: string]: boolean }>({
     videoScreen: true,
     foodTesting: false,
@@ -754,21 +770,33 @@ export default function App() {
     setSelectedQuizOption(null);
     setQuizScores(0);
     setQuizFeedbackText("");
+    setAttemptedWrongOptions([]);
+    setIsQuizQuestionSolved(false);
+    setIsFirstAttempt(true);
+    setIsQuizFinished(false);
     setShowQuizModal(true);
   };
 
   const handleSelectQuizOption = (optIdx: number) => {
-    if (selectedQuizOption !== null) return; // already answered
-    setSelectedQuizOption(optIdx);
+    if (isQuizQuestionSolved || isQuizFinished) return; // already solved or finished
+    if (attemptedWrongOptions.includes(optIdx)) return; // already tried this wrong option
     
     if (!currentQuizCountry) return;
     const currentQ = currentQuizCountry.quiz[quizQuestionIndex];
     if (optIdx === currentQ.correctIndex) {
-      setQuizScores(prev => prev + 1);
-      setQuizFeedbackText("🎉 정답입니다! 해당 지역 문화의 깊은 유래를 정확하게 조준했네요!");
+      setIsQuizQuestionSolved(true);
+      setSelectedQuizOption(optIdx);
+      if (isFirstAttempt) {
+        setQuizScores(prev => prev + 1);
+        setQuizFeedbackText("🎉 정답입니다! 단 한 번에 맞췄군요! 해당 지역 문화의 깊은 유래를 정확하게 짚어냈습니다.");
+      } else {
+        setQuizFeedbackText("🎉 정답입니다! 제공된 힌트를 꼼꼼히 상기하면서 깊이 스스로 정답을 드디어 찾아내셨네요! 대단히 훌륭합니다.");
+      }
     } else {
-      const correctText = currentQ.options[currentQ.correctIndex];
-      setQuizFeedbackText(`❌ 아쉽습니다! 정답은 [${correctText}] 입니다. 오답을 체크하며 세상을 이롭게 배울 수 있습니다.`);
+      setIsFirstAttempt(false);
+      setAttemptedWrongOptions(prev => [...prev, optIdx]);
+      const currentHint = currentQ.hint || "해당 문화/지리 카드 속에 감추어져 있는 자연환경 극복 사유를 차분하게 다시 한 번 유심히 읽어 보아요.";
+      setQuizFeedbackText(`❌ 아쉽습니다! 이 문항은 정답이 아니에요. 정답을 곧바로 명시해 드리는 대신, 간접 힌트를 줄게요. 스스로 다시 도전해 보세요!\n\n💡 힌트: ${currentHint}`);
     }
   };
 
@@ -778,15 +806,16 @@ export default function App() {
       setQuizQuestionIndex(quizQuestionIndex + 1);
       setSelectedQuizOption(null);
       setQuizFeedbackText("");
+      setAttemptedWrongOptions([]);
+      setIsQuizQuestionSolved(false);
+      setIsFirstAttempt(true);
     } else {
-      // Quiz Finished! Check if score matches
-      const isPerfect = quizScores + (selectedQuizOption === currentQuizCountry.quiz[quizQuestionIndex].correctIndex ? 1 : 0) >= currentQuizCountry.quiz.length;
-      
+      // Quiz Finished!
+      setIsQuizFinished(true);
       if (!userPassportStamps.includes(currentQuizCountry.code)) {
         setUserPassportStamps([...userPassportStamps, currentQuizCountry.code]);
       }
-      
-      setQuizFeedbackText(`학습 미션 부스 수료 완료! 총 ${currentQuizCountry.quiz.length}문제 중 ${quizScores}문제를 정교하게 해결하셨습니다. 박람회 여권에 새로운 공식 디지털 활성 스탬프가 마킹되었습니다!`);
+      setQuizFeedbackText(`🏅 학습 미션 부스 수료 완료! 총 ${currentQuizCountry.quiz.length}문제의 지구촌 수수께끼를 끈기 있고 정교하게 모두 직접 다 해결하셨습니다.\n\n박람회 여권에 새로운 공식 디지털 스탬프 스티커가 정상적으로 날인 수여되었습니다!`);
     }
   };
 
@@ -3714,45 +3743,76 @@ ${clausesCombined}`
 
             {/* Modal Content */}
             <div className="p-6 md:p-8 flex flex-col gap-6">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-3">
                 <span>Quiz {quizQuestionIndex + 1} of {currentQuizCountry.quiz.length}</span>
                 <span>정답 개수: {quizScores} / {currentQuizCountry.quiz.length}</span>
               </div>
 
-              <p className="text-sm md:text-base font-extrabold text-slate-800 leading-relaxed">
-                Q. {currentQuizCountry.quiz[quizQuestionIndex].question}
-              </p>
+              {!isQuizFinished ? (
+                <>
+                  <p className="text-sm md:text-base font-extrabold text-slate-850 leading-relaxed font-sans">
+                    Q. {currentQuizCountry.quiz[quizQuestionIndex].question}
+                  </p>
 
-              <div className="flex flex-col gap-2.5 my-1">
-                {currentQuizCountry.quiz[quizQuestionIndex].options.map((option, idx) => {
-                  const isChecked = selectedQuizOption === idx;
-                  const isCorrect = idx === currentQuizCountry.quiz[quizQuestionIndex].correctIndex;
-                  return (
-                    <button 
-                      key={idx}
-                      onClick={() => handleSelectQuizOption(idx)}
-                      disabled={selectedQuizOption !== null}
-                      className={`p-3.5 rounded-xl border text-left text-xs font-bold leading-normal transition-all ${
-                        selectedQuizOption === null
-                          ? "bg-slate-50 border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 text-slate-700"
-                          : isCorrect
-                            ? "bg-emerald-50 border-emerald-400 text-emerald-800"
-                            : isChecked
-                              ? "bg-rose-50 border-rose-400 text-rose-800"
-                              : "bg-slate-50 border-slate-200 text-slate-400 opacity-60"
-                      }`}
-                    >
-                      <span className="mr-2 text-indigo-600 font-mono">[{idx+1}]</span> {option}
-                    </button>
-                  );
-                })}
-              </div>
+                  <div className="flex flex-col gap-2.5 my-1">
+                    {currentQuizCountry.quiz[quizQuestionIndex].options.map((option, idx) => {
+                      const isWrongAttempt = attemptedWrongOptions.includes(idx);
+                      const isCorrect = idx === currentQuizCountry.quiz[quizQuestionIndex].correctIndex;
+                      const isSolved = isQuizQuestionSolved;
+
+                      let btnClasses = "";
+                      let statusText = `[${idx + 1}]`;
+                      let isDisabled = false;
+
+                      if (isSolved) {
+                        isDisabled = true;
+                        if (isCorrect) {
+                          btnClasses = "bg-emerald-50 border-emerald-400 text-emerald-800 ring-2 ring-emerald-200/40";
+                          statusText = "🟢 정답";
+                        } else {
+                          btnClasses = "bg-slate-100/50 border-slate-200 text-slate-400 opacity-50 cursor-not-allowed";
+                        }
+                      } else {
+                        if (isWrongAttempt) {
+                          isDisabled = true;
+                          btnClasses = "bg-rose-50/70 border-rose-350 text-rose-600 line-through cursor-not-allowed";
+                          statusText = "❌ 오답";
+                        } else {
+                          btnClasses = "bg-slate-50 border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 text-slate-700 cursor-pointer";
+                        }
+                      }
+
+                      return (
+                        <button 
+                          key={idx}
+                          onClick={() => handleSelectQuizOption(idx)}
+                          disabled={isDisabled}
+                          className={`p-3.5 rounded-xl border text-left text-xs font-bold leading-normal transition-all duration-300 ${btnClasses}`}
+                        >
+                          <span className="mr-2 text-indigo-600 font-mono font-black">{statusText}</span> {option}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="py-8 text-center space-y-4 animate-scale-up">
+                  <div className="text-6xl animate-bounce">🏆</div>
+                  <h3 className="text-lg font-black text-slate-900 font-sans">지구촌 성취 인증 골든벨 클리어!</h3>
+                  <p className="text-xs text-slate-600 font-semibold px-4 leading-relaxed font-sans">
+                    축하합니다! 다정한 은유적 힌트를 적극적으로 활용하며 스스로 완벽하게 정답을 성찰하고 밝혀내는 멋진 탐구 미션을 완전히 마쳤습니다.
+                  </p>
+                  <div className="bg-indigo-50/50 rounded-2xl p-4 border border-indigo-100 inline-block">
+                    <span className="text-xs font-bold text-indigo-800">단 한 번에 명중시킨 퀴즈 개수: {quizScores} / {currentQuizCountry.quiz.length} 문항</span>
+                  </div>
+                </div>
+              )}
 
               {quizFeedbackText && (
-                <div className={`p-4 rounded-xl text-xs font-medium leading-relaxed animate-fade-in ${
-                  selectedQuizOption === currentQuizCountry.quiz[quizQuestionIndex].correctIndex 
-                    ? "bg-emerald-50 text-emerald-800 border border-emerald-150" 
-                    : "bg-rose-50 text-rose-800 border border-rose-150"
+                <div className={`p-4 rounded-xl text-xs font-semibold leading-relaxed animate-fade-in border whitespace-pre-wrap ${
+                  isQuizQuestionSolved 
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-250" 
+                    : "bg-amber-50 text-amber-900 border-amber-250 animate-pulse"
                 }`}>
                   {quizFeedbackText}
                 </div>
@@ -3761,7 +3821,14 @@ ${clausesCombined}`
 
             {/* Modal Footer */}
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-150 flex justify-end">
-              {selectedQuizOption !== null ? (
+              {isQuizFinished ? (
+                <button 
+                  onClick={() => setShowQuizModal(false)}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black tracking-wide transition shadow-md"
+                >
+                  축하합니다! 여권 마스크 닫기
+                </button>
+              ) : isQuizQuestionSolved ? (
                 <button 
                   onClick={handleNextQuiz}
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black tracking-wide transition flex items-center gap-1.5"
@@ -3773,7 +3840,7 @@ ${clausesCombined}`
                   )}
                 </button>
               ) : (
-                <span className="text-[11px] text-slate-400 self-center">답안을 터치하여 바로 맞춤 자문을 확인하세요.</span>
+                <span className="text-[11px] text-slate-400 self-center font-bold">💡 정답을 스스로 발견해야 다음 문항으로 나아갈 수 있습니다 (힌트 카드 참조 가능)</span>
               )}
             </div>
 
