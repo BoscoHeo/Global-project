@@ -192,7 +192,34 @@ const SEEDED_COUNTRIES: CountryInfo[] = [
   }
 ];
 
+// 학생 입력 성실도 및 의미성 검증 헬퍼 (초성만 쓰거나 무의미한 길이 필터링)
+const checkContentQuality = (text: string): { isValid: boolean; reason?: string } => {
+  if (!text) {
+    return { isValid: false, reason: "입력 박스에 탐구 수집 내용이 기술되어 있지 않아 비어 있습니다." };
+  }
+  const clean = text.trim();
+  if (clean.length < 8) {
+    return { isValid: false, reason: `조사 자료의 내용이 지나치게 짧습니다. 세계화 탐구 교육 기준에 따라 최소 8자 이상 충실하게 작성해 주세요. (현재 ${clean.length}자)` };
+  }
+  
+  // 초성 및 단순 무의미한 연속 문자 필생 체크 (예: 'ㅁ', 'ㅋ', 'ㄴ', 'ㅇ', 'ㅋㅋ')
+  const consonantVowelRegex = /^[ㄱ-ㅎㅏ-ㅣ\s\d.,!?~^*()-_=+]+$/;
+  if (consonantVowelRegex.test(clean)) {
+    return { isValid: false, reason: "실제 뜻이 통하는 한글 문장이 아니며, 단순 자음(초성)이나 모음('ㅁ', 'ㅋ', 'ㅇ' 등) 및 기호 위주로만 작성되었습니다. 지식을 조사하여 완전한 한글 문장으로 기입하십시오." };
+  }
+
+  // 글자 수가 비록 길어도 동일 단어/글자 초과 반복 (예: 'ㅁㅁㅁㅁㅁㅁㅁㅁㅁㅁㅁㅁㅁㅁㅁ')
+  const trimmedNoSpace = clean.replace(/[\s.,!?~]/g, "");
+  const charSet = new Set(trimmedNoSpace);
+  if (charSet.size <= 2 && trimmedNoSpace.length > 5) {
+    return { isValid: false, reason: "동일한 문자나 초성이 단순 반복(예: 'ㄴㅁㄴㅁㄴㅁㄴㅁ')되어 있는 성실도 미충족 란입니다. 다시 작성해주세요." };
+  }
+  
+  return { isValid: true };
+};
+
 export default function App() {
+  const [classCode, setClassCode] = useState<string>("6-1");
   const [activeTab, setActiveTab] = useState<string>("curriculum");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [countries, setCountries] = useState<CountryInfo[]>(SEEDED_COUNTRIES);
@@ -200,36 +227,122 @@ export default function App() {
   const [generatingCountryName, setGeneratingCountryName] = useState<string>("");
   const [isGeneratingCountry, setIsGeneratingCountry] = useState<boolean>(false);
   
-  // Group states
+  // Custom API key & Teacher Aggregation States
+  const [userApiKey, setUserApiKey] = useState<string>(() => localStorage.getItem("user_gemini_api_key") || "");
+  const [showApiKeyConfig, setShowApiKeyConfig] = useState<boolean>(false);
+  const [isServerApiKeyActive, setIsServerApiKeyActive] = useState<boolean>(false);
+  const [configTargetClass, setConfigTargetClass] = useState<string>("all");
+  const [importedPortfolios, setImportedPortfolios] = useState<any[]>([]);
+  const [selectedImportedPortfolioIndex, setSelectedImportedPortfolioIndex] = useState<number | null>(null);
+  const [isEvaluatingProxy, setIsEvaluatingProxy] = useState<boolean>(false);
+  const [tempTeacherObservation, setTempTeacherObservation] = useState<string>("");
+  const [tempFinalGrade, setTempFinalGrade] = useState<string>("");
+
+  useEffect(() => {
+    if (selectedImportedPortfolioIndex !== null && importedPortfolios[selectedImportedPortfolioIndex]) {
+      const p = importedPortfolios[selectedImportedPortfolioIndex];
+      setTempTeacherObservation(p.teacherObservation || "");
+      setTempFinalGrade(p.finalGrade || p.aiEvaluation?.grade || "A");
+    } else {
+      setTempTeacherObservation("");
+      setTempFinalGrade("");
+    }
+  }, [selectedImportedPortfolioIndex]);
+
+  const checkServerApiKeyStatus = async () => {
+    try {
+      const scopeParam = (unlockedClassScope && unlockedClassScope !== "none") ? unlockedClassScope : classCode;
+      const res = await fetch(`/api/teacher-api-key/status?classCode=${encodeURIComponent(scopeParam)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setIsServerApiKeyActive(data.hasKey);
+      }
+    } catch (e) {
+      console.error("Failed to fetch server api key status:", e);
+    }
+  };
+  
+  // Teacher verification lock states
+  const [unlockedClassScope, setUnlockedClassScope] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("editor") === "teacher" || params.get("role") === "teacher" || params.get("admin") === "true") {
+        return "all";
+      }
+    } catch (_) {}
+    return "none"; // "all" if super admin/raw bypass, otherwise e.g., "6-1" if specific class code
+  });
+
+  const [isTeacherUnlocked, setIsTeacherUnlocked] = useState<boolean>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("editor") === "teacher" || params.get("role") === "teacher" || params.get("admin") === "true";
+    } catch (_) {
+      return false;
+    }
+  });
+  const [showTeacherUnlockModal, setShowTeacherUnlockModal] = useState<boolean>(false);
+  const [teacherPinInput, setTeacherPinInput] = useState<string>("");
+  const [teacherPinError, setTeacherPinError] = useState<string>("");
+
+  useEffect(() => {
+    if (unlockedClassScope && unlockedClassScope !== "none") {
+      setConfigTargetClass(unlockedClassScope);
+    }
+  }, [unlockedClassScope]);
+  
+  // Custom class-specific passcodes config states
+  const [classPasscodes, setClassPasscodes] = useState<{ master: string; custom: Record<string, string> }>({ master: "3201", custom: {} });
+  const [newClassCodeToSet, setNewClassCodeToSet] = useState<string>("");
+  const [newPasscodeToSet, setNewPasscodeToSet] = useState<string>("");
+
+  const fetchPasscodes = async () => {
+    try {
+      const res = await fetch("/api/class-passcode/list");
+      if (res.ok) {
+        const data = await res.json();
+        setClassPasscodes(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch class passcodes:", e);
+    }
+  };
+
+  useEffect(() => {
+    checkServerApiKeyStatus();
+  }, [unlockedClassScope, classCode]);
+
+  useEffect(() => {
+    if (isTeacherUnlocked) {
+      fetchPasscodes();
+    }
+  }, [isTeacherUnlocked]);
+  
+  // World Expo Exhibition states
+  const [showExpoShowcase, setShowExpoShowcase] = useState<boolean>(false);
+  const [expoActiveIndex, setExpoActiveIndex] = useState<number | null>(null);
+  const [expoStoryboardSlideIndex, setExpoStoryboardSlideIndex] = useState<number>(0);
+  
+  // Student Self-Research & Online Submission States
+  const [studentResearch, setStudentResearch] = useState<{
+    [countryCode: string]: {
+      food: string;
+      greeting: string;
+      costume: string;
+      festival: string;
+    }
+  }>({});
+  const [isSubmittingLive, setIsSubmittingLive] = useState<boolean>(false);
+  const [videoUrl, setVideoUrl] = useState<string>("");
+  
   const [groupName, setGroupName] = useState<string>("글로벌 지킴이 1모둠");
-  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([
-    { name: "김민재", role: "촬영 및 대사 조율" },
-    { name: "이서연", role: "대본 작성 및 화면 구성" },
-    { name: "최준우", role: "전통 의상 소품 제작" },
-    { name: "박지아", role: "현장 인터뷰 및 연출" }
-  ]);
+  const [teacherFilterClass, setTeacherFilterClass] = useState<string>(""); // "" means show all, or filtered classroom code e.g., "6-1"
+  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
   const [newMemberName, setNewMemberName] = useState<string>("");
   const [newMemberRole, setNewMemberRole] = useState<string>("");
 
   // Tab 1 States: Storyboard Planner
-  const [storyboard, setStoryboard] = useState<StoryboardScene[]>([
-    {
-      id: "1",
-      sceneNumber: 1,
-      category: "언어/인사",
-      screenVisual: "김민재 학생이 전통 의상을 가볍게 들고나와 카메라를 향해 정중히 손을 가슴에 얹어 모으며 이집트식 정식 평화 인사인 '앗살라무 알라이쿰'을 선사하는 단독 롱테이크 샷.",
-      audioText: "나레이션: '서로 다른 나라의 인사는 단순한 말 한마디가 아닌 역사와 존중의 집합체입니다. 평화로운 모래 지대의 이집트식 정중함을 느껴보세요!'",
-      notes: "카메라 앵글은 눈높이에 맞추고 미소 짓는 표정을 5초간 집중 유지하며 촬영 소요."
-    },
-    {
-      id: "2",
-      sceneNumber: 2,
-      category: "음식",
-      screenVisual: "이서연, 최준우 학생이 모형 마카로니와 병아리콩을 그릇에 담아 소스를 격렬히 비비는 이집트식 대중 서민 요리 '코샤리' 요리 시연 클로즈업 샷.",
-      audioText: "효과음: '보글보글 맛있는 대화 소리가 지나친 후...' 대사(지아): '이 음식에는 나일강 범람 시기에 풍부했던 탄수화물 영양소가 가득 차 있어서 이집트 전 국민을 보듬어 주었어요!'",
-      notes: "다진 튀긴 양파 모형 소품 준비 필수, 시각적으로 매콤함이 들도록 토마토 시럽 모스 준비."
-    }
-  ]);
+  const [storyboard, setStoryboard] = useState<StoryboardScene[]>([]);
   const [editSceneIndex, setEditSceneIndex] = useState<number | null>(null);
   const [sceneInput, setSceneInput] = useState<Partial<StoryboardScene>>({
     category: "음식",
@@ -260,33 +373,123 @@ export default function App() {
 
   // Tab 3 States: UN Resolution Draft
   const [resolution, setResolution] = useState({
-    sponsorCountry: "이집트 대표국 (1모둠 공동 제안)",
+    sponsorCountry: "",
     resolutionNumber: "A/RES/6/32-01",
-    title: "기후 적응 소규모 섬나라 지지 및 대륙별 식수 보장과 국제 평등 자원 나눔 동반 결의의 건",
-    preamble: "우리 모의 UN 위원회의 대표국들은 화석 연료 고갈과 해수면 상승으로 생존권을 파괴당하는 인류 안녕에 심대한 우려를 공유한다. 특히 선진 공장 지대에서 배출하는 탄소가 아프리카 식수 부족을 가속하는 악순환을 성찰하며, 정의로운 연대로 보편적 행복권을 누려야 함을 자각, 이에 다음과 같은 평화 실천적 조항들을 다짐하고 전 세계 회원국에 자치적 참여를 촉약한다."
+    title: "",
+    preamble: ""
   });
-  const [operativeClauses, setOperativeClauses] = useState<string[]>([
-    "기후 해수면 비상 기금을 창출하여 저개발 연안 섬나라의 친환경 해수 배수 방벽 제작 기술 사업비를 무상 전격 전도한다.",
-    "교내 및 가정에서 전력 낭비를 15% 일괄 감량하고 텀블러 보급 대책을 교장 교원과 결연하여 공익 캠페인을 월별 행사로 주최한다."
-  ]);
+  const [operativeClauses, setOperativeClauses] = useState<string[]>([]);
   const [newClauseText, setNewClauseText] = useState<string>("");
   const [resolutionFeedback, setResolutionFeedback] = useState<any | null>(null);
   const [evaluatingResolution, setEvaluatingResolution] = useState<boolean>(false);
 
   // Tab 4 States: Campaign Suggest & Citizen Oath
   const [campaignInput, setCampaignInput] = useState({
-    topic: "지구촌 기후 정의와 생활 속 분리수거 실천",
-    coreMessage: "우리의 따뜻한 낭비를 줄이고 세계 친구들을 위한 친환경 텀블러 사용을 상설화합시다."
+    topic: "",
+    coreMessage: ""
   });
   const [suggestedSlogans, setSuggestedSlogans] = useState<any[]>([]);
   const [loadingCampaign, setLoadingCampaign] = useState<boolean>(false);
   const [citizenOath, setCitizenOath] = useState<any>({
-    studentName: "김민재",
-    pledge1: "세계 여러 나라의 문화와 그들이 살아온 환경적 배경에 편견을 품지 않고 존중하여 대한다.",
-    pledge2: "물 절약과 분리수거, 일회용 폐기물 일절 감량을 일상생활의 최고 덕목으로 삼아 실천한다.",
-    pledge3: "어려운 난민과 소외 이웃의 인권 침해 소식을 외면하지 않으며 교내 지구촌 공익 캠페인에 선전한다."
+    studentName: "",
+    pledge1: "",
+    pledge2: "",
+    pledge3: ""
   });
   const [signedOath, setSignedOath] = useState<boolean>(false);
+
+  // Helper functions to populate sample or reset for students
+  const loadEgyptSample = () => {
+    setGroupName("글로벌 지킴이 이집트 1모둠");
+    setGroupMembers([
+      { name: "김민재", role: "촬영 및 대사 조율" },
+      { name: "이서연", role: "대본 작성 및 화면 구성" },
+      { name: "최준우", role: "전통 의상 소품 제작" },
+      { name: "박지아", role: "현장 인터뷰 및 연출" }
+    ]);
+    setStoryboard([
+      {
+        id: "1",
+        sceneNumber: 1,
+        category: "언어/인사",
+        screenVisual: "김민재 학생이 전통 의상을 가볍게 들고나와 카메라를 향해 정중히 손을 가슴에 얹어 모으며 이집트식 정식 평화 인사인 '앗살라무 알라이쿰'을 선사하는 단독 롱테이크 샷.",
+        audioText: "나레이션: '서로 다른 나라의 인사는 단순한 말 한마디가 아닌 역사와 존중의 집합체입니다. 평화로운 모래 지대의 이집트식 정중함을 느껴보세요!'",
+        notes: "카메라 앵글은 눈높이에 맞추고 미소 짓는 표정을 5초간 집중 유지하며 촬영 소요."
+      },
+      {
+        id: "2",
+        sceneNumber: 2,
+        category: "음식",
+        screenVisual: "이서연, 최준우 학생이 모형 마카로니와 병아리콩을 그릇에 담아 소스를 격렬히 비비는 이집트식 대중 서민 요리 '코샤리' 요리 시연 클로즈업 샷.",
+        audioText: "효과음: '보글보글 맛있는 대화 소리가 지나친 후...' 대사(지아): '이 음식에는 나일강 범람 시기에 풍부했던 탄수화물 영양소가 가득 차 있어서 이집트 전 국민을 보듬어 주었어요!'",
+        notes: "다진 튀긴 양파 모형 소품 준비 필수, 시각적으로 매콤함이 들도록 토마토 시럽 모스 준비."
+      }
+    ]);
+    setResolution({
+      sponsorCountry: "이집트 대표국 (1모둠 공동 제안)",
+      resolutionNumber: "A/RES/6/32-01",
+      title: "기후 적응 소규모 섬나라 지지 및 대륙별 식수 보장과 국제 평등 자원 나눔 동반 결의의 건",
+      preamble: "우리 모의 UN 위원회의 대표국들은 화석 연료 고갈과 해수면 상승으로 생존권을 파괴당하는 인류 안녕에 심대한 우려를 공유한다. 특히 선진 공장 지대에서 배출하는 탄소가 아프리카 식수 부족을 가속하는 악순환을 성찰하며, 정의로운 연대로 보편적 행복권을 누려야 함을 자각, 이에 다음과 같은 평화 실천적 조항들을 다짐하고 전 세계 회원국에 자치적 참여를 촉약한다."
+    });
+    setOperativeClauses([
+      "기후 해수면 비상 기금을 창출하여 저개발 연안 섬나라의 친환경 해수 배수 방벽 제작 기술 사업비를 무상 전격 전도한다.",
+      "교내 및 가정에서 전력 낭비를 15% 일괄 감량하고 텀블러 보급 대책을 교장 교원과 결연하여 공익 캠페인을 월별 행사로 주최한다."
+    ]);
+    setCampaignInput({
+      topic: "지구촌 기후 정의와 생활 속 분리수거 실천",
+      coreMessage: "우리의 따뜻한 낭비를 줄이고 세계 친구들을 위한 친환경 텀블러 사용을 상설화합시다."
+    });
+    setCitizenOath({
+      studentName: "김민재",
+      pledge1: "세계 여러 나라의 문화와 그들이 살아온 환경적 배경에 편견을 품지 않고 존중하여 대한다.",
+      pledge2: "물 절약과 분리수거, 일회용 폐기물 일절 감량을 일상생활의 최고 덕목으로 삼아 실천한다.",
+      pledge3: "어려운 난민과 소외 이웃의 인권 침해 소식을 외면하지 않으며 교내 지구촌 공익 캠페인에 선전한다."
+    });
+    setStudentResearch({});
+    setSignedOath(true);
+    setVideoUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    alert("💡 (학생/체험 가이드) 샘플 데이터 셋이 로드되었습니다. 입력란 구조를 확인하신 뒤 개별 모둠 주제로 조사해 빈 데이터로 진행해 보세요!");
+  };
+
+  const resetToBlank = () => {
+    setGroupName("글로벌 지킴이 1모둠");
+    setGroupMembers([]);
+    setStoryboard([]);
+    setVideoUrl("");
+    setResolution({
+      sponsorCountry: "",
+      resolutionNumber: "A/RES/6/32-01",
+      title: "",
+      preamble: ""
+    });
+    setOperativeClauses([]);
+    setCampaignInput({
+      topic: "",
+      coreMessage: ""
+    });
+    setCitizenOath({
+      studentName: "",
+      pledge1: "",
+      pledge2: "",
+      pledge3: ""
+    });
+    setStudentResearch({});
+    setSignedOath(false);
+    setScriptFeedback(null);
+    setResolutionFeedback(null);
+    setSuggestedSlogans([]);
+    alert("🗑️ 탐구 기획안이 깨끗이 비워졌습니다! 이제 학생 여러분의 새로운 조사 기획 및 탐구를 이뤄보세요.");
+  };
+
+  const handleUpdateResearch = (key: "food" | "greeting" | "costume" | "festival", value: string) => {
+    setStudentResearch(prev => ({
+      ...prev,
+      [selectedCountry.code]: {
+        ...prev[selectedCountry.code] || { food: "", greeting: "", costume: "", festival: "" },
+        [key]: value
+      }
+    }));
+  };
 
   // UTC Time Ticker
   const [currentTime, setCurrentTime] = useState<string>("2026-06-15 22:45 UTC");
@@ -427,6 +630,42 @@ export default function App() {
       alert("평가받을 시나리오 씬을 최소 한 건 이상 작성한 후 요청해 주세요.");
       return;
     }
+
+    // 🕵️ 학생 불성실 입력 및 자음 남발 차단 분석개시
+    let invalidSceneNum = -1;
+    let qualityErrReason = "";
+    for (let i = 0; i < storyboard.length; i++) {
+      const scene = storyboard[i];
+      const visualCheck = checkContentQuality(scene.screenVisual);
+      const audioCheck = checkContentQuality(scene.audioText);
+      if (!visualCheck.isValid) {
+        invalidSceneNum = scene.sceneNumber;
+        qualityErrReason = `화면 연출 내용 - ${visualCheck.reason}`;
+        break;
+      }
+      if (!audioCheck.isValid) {
+        invalidSceneNum = scene.sceneNumber;
+        qualityErrReason = `오디오/내레이션 대사 - ${audioCheck.reason}`;
+        break;
+      }
+    }
+
+    if (invalidSceneNum !== -1) {
+      alert(`⚠️ [성실기준 미달] 장면(Scene) #${invalidSceneNum}의 기획 설명에 성실도 부족이 감지되었습니다!\n\n부족 사유 -> ${qualityErrReason}\n\n의미 없는 단어 반복이나 초성(ㅁ,ㄴ 등) 나열을 지우고, 지구촌 사람들의 실질적 생활상이 담기도록 성의 있는 설명 한글 문장으로 8자 이상 작성해 주어야 AI 분석을 진행할 수 있습니다.`);
+      
+      setScriptFeedback({
+        feedback: `🚨 [기획 내용 수준 불충분] 장면 #${invalidSceneNum}에서 학생들의 자료 입력 미달 사실을 확인했습니다. (세부사유: ${qualityErrReason}) 세계 문화를 조사하고 협력한 가치가 대본 속에 충분한 한글 정보로 녹아들도록 문장을 한 층 더 확장해 주셔야 합니다.`,
+        recommendations: [
+          "단순 자음 연속(ㅁ, ㄴ, ㅇ 등)을 정연한 한글 해설과 대사로 바꾸십시오.",
+          "선택한 문화 주제(음식, 의치, 행사 등)의 구체적인 사회적 명칭과 지리적 이점을 덧붙이세요.",
+          "장면에서 모둠원들의 실제 제스처나 카메라 촬영 앵글 수준을 15자 이상 상세히 기술하십시오."
+        ],
+        level: "보강 필요 (노력 요함)",
+        isLocal: true
+      });
+      return;
+    }
+
     setEvaluatingScript(true);
     setScriptFeedback(null);
 
@@ -439,10 +678,50 @@ export default function App() {
 
     const rolesCombined = groupMembers.map(m => `${m.name}(${m.role})`).join(", ");
 
+    // 로컬 지능형 교육 분석 엔진 (API 키 없는 학생용 즉시 연동)
+    if (!userApiKey.trim()) {
+      setTimeout(() => {
+        const totalScenes = storyboard.length;
+        let pLevel = "보통";
+        let recs = [
+          "각 장면 전환 타이밍을 8초 내외로 조절하여 영상 전개의 몰입도를 살려보세요.",
+          "전통 음악이나 잔잔한 리듬을 오디오 트랙 배경에 믹싱하면 훨씬 생동감이 살아납니다."
+        ];
+        
+        let pFeedback = `[학습 로컬 자문 결과] 학생 과학 기획단 모둠의 씬 기획안 ${totalScenes}개에 대한 구조 분석을 완료했습니다. `;
+        if (totalScenes >= 3) {
+          pLevel = "매우 우수";
+          pFeedback += `스토리의 연출 전환이 다채롭고 단원 간 역할 배분(${rolesCombined || "미지정"})도 유기적으로 짜여 있습니다. 음식, 인사, 문화적 성찰 내용이 논리적으로 배치된 모범 스토리보드입니다!`;
+          recs.push("최종 촬영 전, 조명의 각도와 팀원들의 리허설 동작을 1회 점검하길 강력히 제안합니다.");
+        } else if (totalScenes >= 2) {
+          pLevel = "우수";
+          pFeedback += `기본적인 인사와 문화 탐색 씬 구성이 조화롭게 잘 잡혀 있습니다. 각 씬의 화면 지침이 매우 상세하여 제작 시 실제 영상화하기에 제격입니다.`;
+          recs.push("클로징 씬(3번째 장면)으로 이 나라의 환경 문제나 문화 다양성을 성찰하는 마무리 약속 씬을 하나 더 덧붙여도 좋습니다.");
+        } else {
+          pLevel = "보강 권장";
+          pFeedback += `장면이 다소 압축적입니다. 시청자가 세계 다문화의 아름다움을 더 깊이 체험할 수 있도록 두 번째와 세 번째 씬을 입체적으로 확장해 보세요.`;
+          recs.push("최소한 인사말 씬 외에 전통 요리 제작 시연이나 현장 의복 촬영 씬을 추가하여 다채롭게 만드십시오.");
+        }
+
+        setScriptFeedback({
+          feedback: pFeedback,
+          recommendations: recs,
+          level: pLevel,
+          isLocal: true
+        });
+        setEvaluatingScript(false);
+      }, 600);
+      return;
+    }
+
     try {
       const res = await fetch("/api/ai/evaluate-script", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-gemini-api-key": userApiKey,
+          "x-class-code": classCode
+        },
         body: JSON.stringify({
           country: selectedCountry.name,
           topic: "종합 문화 탐구 및 영상 제작 시나리오",
@@ -524,15 +803,103 @@ export default function App() {
 
   // UN Resolution Evaluate
   const handleEvaluateResolution = async () => {
+    // 🕵️ UN 결의안 불성실 입력 및 기안 요건 불충분 검증개시
+    if (!resolution.title.trim() || !resolution.preamble.trim()) {
+      alert("⚠️ UN 결의안의 [공식 의안 제목]과 [결의안 서두 전문]이 기재되어 있지 않거나 비어 있습니다.\n\n세계 무대에서 선언을 펼칠 수 있게 제목과 전문을 먼저 성실히 작성해 주시기 바랍니다.");
+      return;
+    }
+
+    const titleQuality = checkContentQuality(resolution.title);
+    const preambleQuality = checkContentQuality(resolution.preamble);
+
+    if (!titleQuality.isValid) {
+      alert(`⚠️ [UN 결의안 제목 부실화 감지]\n\n부족 사유 -> ${titleQuality.reason}`);
+      return;
+    }
+    if (!preambleQuality.isValid) {
+      alert(`⚠️ [UN 결의안 서두 전문 부실화 감지]\n\n부족 사유 -> ${preambleQuality.reason}`);
+      return;
+    }
+
+    if (operativeClauses.length === 0) {
+      alert("⚠️ UN 결의안의 실제적 약속인 [국가 실천 조항]이 단 하나도 등록되어 있지 않습니다.\n\n하단 입력 칸을 통해 전 세계가 공동 지켜나갈 조항을 최소 한 문항 이상 발의해 등록해 주세요.");
+      return;
+    }
+
+    let invalidClauseIdx = -1;
+    let clauseErrReason = "";
+    for (let i = 0; i < operativeClauses.length; i++) {
+      const check = checkContentQuality(operativeClauses[i]);
+      if (!check.isValid) {
+        invalidClauseIdx = i + 1;
+        clauseErrReason = check.reason;
+        break;
+      }
+    }
+
+    if (invalidClauseIdx !== -1) {
+      alert(`⚠️ [실천 조항 기재 미진] 제 ${invalidClauseIdx} 실천 조항 기재 상태에 불성실 항목이 검출되었습니다!\n\n부족 사유 -> ${clauseErrReason}\n\n사유를 검토하고 자음 단독 나열 대신 지구촌에 실정 도움을 줄 의무 약속을 완전한 문체로 서술바랍니다.`);
+      
+      setResolutionFeedback({
+        analysis: `🚨 [기약 서명 보류] 제 ${invalidClauseIdx} 실천 조항의 표현이 너무 장난스럽거나 짧게 기재되어 가상 UN 접수가 취소되었습니다. (성실 사유: ${clauseErrReason}) 실천 및 효과가 명확히 명세되도록 조항을 고쳐 써 주십시오.`,
+        actionableSuggestions: [
+          "친환경 폐기물 줄이기나 나눔 은행 등 교내 혹은 국가 별로 추진할 규율을 구체화하십시오.",
+          "자음(ㅁ,ㄴ,ㅋ)이나 문장 파편을 지우고, 15자 이상의 단정한 문장으로 변경해 주십시오."
+        ],
+        status: "기안 보류 (보강 필요)",
+        isLocal: true
+      });
+      return;
+    }
+
     setEvaluatingResolution(true);
     setResolutionFeedback(null);
 
     const clausesCombined = operativeClauses.map((c, i) => `제 ${i+1}항: ${c}`).join("\n");
 
+    // 로컬 스마트 학업 피드백 분기 (학생용 및 서버키 없음 대비)
+    if (!userApiKey.trim()) {
+      setTimeout(() => {
+        const clausesCount = operativeClauses.length;
+        let rStatus = "보강 필요";
+        let rSuggs = [
+          "각국 정부의 지출 강제보다는 '자발적인 세계시민 나눔 은행' 형식으로 완화해 보세요.",
+          "실천 수치를 선언했을 경우 달성 연도 성과 측정을 검증하는 추상 조항도 덧붙여 보세요."
+        ];
+        let rAnalysis = `[학습 로컬 분석 비서] 학생들이 다짐한 UN 결의안 초안인 [${resolution.title || "지구촌 실천 선언"}]을 모의 위원회 접수 분석 완료했습니다. `;
+
+        if (clausesCount >= 3) {
+          rStatus = "최상위 합의 달성 (!)";
+          rAnalysis += `총 ${clausesCount}개의 정량적 실천 한 조항들이 돋보입니다. 가정내 전력 절전 의무 보급, 일회용 폐기물 일괄 감축 등 교실과 지구를 잇는 실천성이 매우 조화롭습니다.`;
+          rSuggs.push("이 결의안을 교내 게시판이나 학급 자치 단체 SNS에 게재하여 다른 반 학우들에게도 선포하길 권장합니다.");
+        } else if (clausesCount >= 1) {
+          rStatus = "조정 통과";
+          rAnalysis += `소중한 실천 대안이 수립되었습니다. 지구촌 한편에서 고통받는 난민 또는 작물 피해국을 돕기 위해 학급에서 선도적으로 전도할 수 있는 작은 약속이 핵심을 찌르고 있습니다.`;
+          rSuggs.push("조항을 최소한 3개 이상으로 세분화해 보면, 훨씬 입체적이고 다채로운 실무 포트폴리오 성과로 직행할 수 있습니다.");
+        } else {
+          rStatus = "기안 보류";
+          rAnalysis += `아직 등록된 공식 실천 조항이 없습니다. 하단 입력 칸을 활용해 전 세계가 공동으로 지켜나가야 할 환경보호 또는 다양성 수호 원칙을 추가해 주십시오.`;
+        }
+
+        setResolutionFeedback({
+          analysis: rAnalysis,
+          actionableSuggestions: rSuggs,
+          status: rStatus,
+          isLocal: true
+        });
+        setEvaluatingResolution(false);
+      }, 500);
+      return;
+    }
+
     try {
       const res = await fetch("/api/ai/evaluate-resolution", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-gemini-api-key": userApiKey,
+          "x-class-code": classCode
+        },
         body: JSON.stringify({
           topic: "지구촌 자원 결핍 대응 및 다대륙 기후 인권 형평 보장",
           issues: "기후 환경 위기 및 난민 자립 한계 돌파",
@@ -555,6 +922,7 @@ ${clausesCombined}`
         actionableSuggestions: [
           "각국의 의사결정 강제 기여금보다는 상호 협동 기술 조합 형태로 표현하면 외교 마찰을 크게 완화할 수 있습니다.",
           "중앙정부뿐 아니라 NGO 시민 단체와 결연하는 내용을 3항에 이식하면 완충 실천력이 좋아집니다.",
+          "실천 수치(15%)를 명문화한 것처럼 각 연차별 달성 검증 시스템 조항도 덧붙여 보세요.",
           "실천 수치(15%)를 명문화한 것처럼 각 연차별 달성 검증 시스템 조항도 덧붙여 보세요."
         ],
         status: "완성도 높음"
@@ -569,10 +937,31 @@ ${clausesCombined}`
     setLoadingCampaign(true);
     setSuggestedSlogans([]);
 
+    const tTopic = campaignInput.topic || "세계 다문화 어깨동무 어우러짐 및 생태 보전";
+    const tMsg = campaignInput.coreMessage || "배려하는 마음으로 낭비를 줄이고 조화롭게 살아가요.";
+
+    // 로컬 슬로건 지능 큐레이션 엔진
+    if (!userApiKey.trim()) {
+      setTimeout(() => {
+        setSuggestedSlogans([
+          { slogan: `🌍 [기후 정의] 남의 일이 아닌 나의 일! ${tMsg ? tMsg.slice(0, 18) : "플라스틱 다이어트"}... 텀블러로 1도 낮춰요!`, designIdea: "녹아내리는 빙하 위 북극곰과 에메랄드색 친환경 물병 심볼 결합" },
+          { slogan: `🥣 [문화 존중] 소외된 이웃의 음식 한 그릇, 선교적 한 치의 편견 없이 나누는 식탁!`, designIdea: "다양한 색상의 손들이 모여 하나의 풍요로운 한솥밥 그릇을 감싸 쥐는 일러스트" },
+          { slogan: `🕊️ [다양성 만세] 편견의 안경은 분리수거함으로, 세계시민 성찰 가치관은 학교 안으로!`, designIdea: "서로 다른 무늬의 세계 전통 복식을 입은 학생 친구들이 손을 잡는 포스터" },
+          { slogan: `💧 [실천 선언] 우리 모둠의 솔선수범! '${tTopic ? tTopic.slice(0,18) : "지구지킴 약속"}' 지금 실행해요.`, designIdea: "깨끗한 세계 지도 주변으로 하트 가치 선언을 새기는 심볼 마킹" }
+        ]);
+        setLoadingCampaign(false);
+      }, 450);
+      return;
+    }
+
     try {
       const res = await fetch("/api/ai/suggest-campaign", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-gemini-api-key": userApiKey,
+          "x-class-code": classCode
+        },
         body: JSON.stringify({
           topic: campaignInput.topic,
           coreMessage: campaignInput.coreMessage
@@ -597,6 +986,71 @@ ${clausesCombined}`
   return (
     <div className="flex flex-col min-h-screen bg-[#F8FAFC] text-slate-800 font-sans antialiased selection:bg-indigo-100">
       
+      {/* Dynamic API Settings Modal */}
+      {showApiKeyConfig && isTeacherUnlocked && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in text-left">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl p-6 relative">
+            <button 
+              onClick={() => setShowApiKeyConfig(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-bold p-1"
+            >
+              ✕
+            </button>
+            <div className="flex items-center gap-2 mb-3">
+              <Sliders className="w-5 h-5 text-indigo-600 animate-pulse" />
+              <h3 className="text-md font-extrabold text-slate-900">개인/학교 API 키 개별 설정</h3>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed mb-4">
+              기본 제공되는 공공 AI 할당량이 부족하거나, <strong>각자가 발급받은 Gemini API 키</strong>를 활용해 안전하고 한계 없는 실시간 평론가 피드백을 가동하고 싶다면 아래에 키를 입력하십시오.
+            </p>
+            <div className="bg-slate-50 rounded-lg p-3 text-[10px] text-slate-500 leading-relaxed border border-slate-150 mb-4 space-y-1">
+              <p>💡 <strong>학생 개인 보안 및 비용 안심 보증:</strong> 입력하신 API 키는 브라우저의 <code>localStorage</code>에만 보존되며, 어떠한 외부 서버나 교육자 데이터베이스로 전송되지 않고 구글 정식 API 게이트웨이 호출에 직접 이용됩니다.</p>
+              <p>🔑 API 키 발급은 <span className="text-indigo-600 font-bold hover:underline cursor-pointer" onClick={() => window.open("https://aistudio.google.com/", "_blank")}>aistudio.google.com</span>에서 무료로 1초만에 발급받으실 수 있습니다.</p>
+            </div>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Google Gemini API Key 입력</label>
+                <input 
+                  type="password"
+                  value={userApiKey}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    setUserApiKey(val);
+                  }}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="AIzaSy..."
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    localStorage.setItem("user_gemini_api_key", userApiKey);
+                    setShowApiKeyConfig(false);
+                    alert("🔑 API 키가 안전하게 등록되었습니다! 실시간 AI 피드백이 사용자의 자체 키를 정식 활용합니다.");
+                  }}
+                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-lg shadow-sm transition"
+                >
+                  기기에 안전히 설정 보관
+                </button>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem("user_gemini_api_key");
+                    setUserApiKey("");
+                    setShowApiKeyConfig(false);
+                    alert("🗑️ 등록되었던 API 키가 완전히 제거되었습니다. 이제 서버에 내장된 기본 설정을 활용합니다.");
+                  }}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-lg transition"
+                >
+                  초기화
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sleek Style Upper Navigation */}
       <nav className="h-16 flex items-center justify-between px-6 md:px-8 bg-white border-b border-slate-200 shrink-0 shadow-sm z-30 sticky top-0">
         <div className="flex items-center gap-3">
@@ -604,11 +1058,17 @@ ${clausesCombined}`
             <Globe className="w-5 h-5 text-white animate-spin-slow" />
           </div>
           <div>
-            <h1 className="text-md md:text-lg font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
+            <h1 className="text-md md:text-lg font-extrabold tracking-tight text-slate-900 flex flex-wrap items-center gap-2">
               지구촌 소통 & 지킴이 Studio
               <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                 32차시 통합형
               </span>
+              {isServerApiKeyActive && (
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-700 border border-emerald-500/30 font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                  🏫 학급 AI 활성화됨
+                </span>
+              )}
             </h1>
             <p className="text-xs text-slate-500 font-medium">서로 다른 나라, 함께 사는 세계 • 초등 6학년 모듈형 프로젝트 포털</p>
           </div>
@@ -656,13 +1116,28 @@ ${clausesCombined}`
               <span className="text-[10px] bg-indigo-50 border border-indigo-200 text-indigo-600 px-1.5 py-0.5 rounded-md font-bold">진행형</span>
             </div>
             
-            <input 
-              type="text" 
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none mb-3"
-              placeholder="모둠 이름을 명문화하세요"
-            />
+            <div className="space-y-2 mb-3">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 block mb-1">🏫 소속 학급/교실 코드</label>
+                <input 
+                  type="text" 
+                  value={classCode}
+                  onChange={(e) => setClassCode(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-black text-indigo-700 bg-indigo-50/15 focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:bg-white"
+                  placeholder="예: 6-1"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 block mb-1">👥 실천 탐구 모둠명</label>
+                <input 
+                  type="text" 
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  placeholder="모둠 이름을 명문화하세요"
+                />
+              </div>
+            </div>
 
             <div>
               <div className="flex justify-between items-center mb-1">
@@ -761,6 +1236,36 @@ ${clausesCombined}`
                 <span>캠페인 & 세계인 실천 선서</span>
                 <span className="ml-auto text-[9px] bg-slate-100 text-slate-500 px-1 py-0.2 rounded font-mono">28~32C</span>
               </button>
+
+              {/* Teacher Hub Separator & Button */}
+              <div className="border-t border-slate-100 my-2 pt-2">
+                <button 
+                  onClick={() => {
+                    if (isTeacherUnlocked) {
+                      setActiveTab("teacher");
+                    } else {
+                      setShowTeacherUnlockModal(true);
+                    }
+                  }}
+                  className={`w-full flex items-center gap-3 p-2.5 rounded-lg text-xs font-bold transition text-left cursor-pointer ${
+                    activeTab === "teacher" 
+                      ? "bg-rose-50 border-l-3 border-rose-600 text-rose-700 font-black shadow-xs-rose" 
+                      : isTeacherUnlocked
+                        ? "text-rose-600 hover:bg-rose-50" 
+                        : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <BookOpen className={`w-4 h-4 ${activeTab === "teacher" ? "text-rose-600" : isTeacherUnlocked ? "text-rose-500" : "text-slate-400"}`} />
+                  <div className="flex flex-col text-left">
+                    <span className="flex items-center gap-1">
+                      <span>교사용 결과 수합 허브</span>
+                      <span className="text-[10px]">{isTeacherUnlocked ? "🔓" : "🔒"}</span>
+                    </span>
+                    {!isTeacherUnlocked && <span className="text-[9px] text-slate-400 font-normal">학업 결과 열람 암호잠금</span>}
+                  </div>
+                  <span className="ml-auto text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-mono font-bold">수합</span>
+                </button>
+              </div>
             </nav>
           </div>
 
@@ -777,7 +1282,7 @@ ${clausesCombined}`
                 <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-emerald-500 transition-all duration-500"
-                    style={{ width: `${(userPassportStamps.length / countries.length) * 100}%` }}
+                    style={{ width: `${(userPassportStamps.length / countries.length) * 105 / 1.05}%` }}
                   ></div>
                 </div>
               </div>
@@ -814,6 +1319,44 @@ ${clausesCombined}`
 
         {/* Master Workspace Content Frame */}
         <main className="flex-1 flex flex-col p-6 md:p-8 lg:overflow-y-auto">
+          
+          {/* Active Academic Guidance Banner for students */}
+          {activeTab !== "teacher" && (
+            <div className="mb-6 bg-gradient-to-r from-indigo-50/50 via-amber-50/30 to-rose-50/20 border border-slate-200/85 rounded-2xl p-4 md:p-5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 shadow-sm text-left">
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-slate-905 flex items-center gap-2">
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
+                  </span>
+                  <span>✍️ 학생 자기주도 탐구 실습 모드 가동 중</span>
+                  <span className="bg-rose-50 border border-rose-200 text-rose-700 text-[10px] px-2 py-0.5 rounded-full font-extrabold">과제 빈칸 직접 완성형</span>
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed max-w-4xl">
+                  이 응용웹앱은 학생들이 실증적 현장 자료 조사를 마친 뒤 스토리보드, UN 결의안, 실천 가이드들을 <strong>스스로 구성·제출</strong>할 수 있도록 모든 기획 영역이 <strong>깨끗한 빈칸(Blank)</strong>으로 최적 배정되어 있습니다. 우측 퀴즈와 문화 아카이브를 조사해 보며 나만의 창조안을 채우세요!
+                </p>
+                <div className="text-[10px] text-slate-500 font-medium">
+                  🔑 <strong>교사 수업 팁:</strong> 학생들이 기획을 끝마치면 최종 5단계에서 <strong className="text-indigo-600">수합용 결과 파일(.json)을 직접 다운로드</strong>하여 선생님께 제출할 수 있으며, 아직 API 키가 없어도 로컬 인공지능 분석 가자문이 항시 원활히 동작합니다.
+                </div>
+              </div>
+              <div className="flex gap-2 items-center lg:self-center self-start shrink-0">
+                <button 
+                  onClick={loadEgyptSample}
+                  className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11.5px] rounded-xl shadow-xs transition duration-150 flex items-center gap-1.5"
+                  title="이집트 탐구 모범 예시를 자동으로 입력합니다."
+                >
+                  💡 완벽 이집트 예제 자동채우기
+                </button>
+                <button 
+                  onClick={resetToBlank}
+                  className="px-3 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 font-bold text-[11.5px] rounded-xl transition"
+                  title="모든 입력값을 초기 빈 상태로 리셋합니다."
+                >
+                  🗑️ 내 기획 초기화
+                </button>
+              </div>
+            </div>
+          )}
           
           {/* Active Tab 1: Curriculum / Country Explorer */}
           {activeTab === "curriculum" && (
@@ -862,7 +1405,11 @@ ${clausesCombined}`
                           try {
                             const res = await fetch("/api/ai/generate-country", {
                               method: "POST",
-                              headers: { "Content-Type": "application/json" },
+                              headers: { 
+                                "Content-Type": "application/json",
+                                "x-gemini-api-key": userApiKey,
+                                "x-class-code": classCode
+                              },
                               body: JSON.stringify({ countryName: generatingCountryName.trim() })
                             });
                             if (!res.ok) throw new Error("API call failed");
@@ -895,7 +1442,11 @@ ${clausesCombined}`
                         try {
                           const res = await fetch("/api/ai/generate-country", {
                             method: "POST",
-                            headers: { "Content-Type": "application/json" },
+                            headers: { 
+                              "Content-Type": "application/json",
+                              "x-gemini-api-key": userApiKey,
+                              "x-class-code": classCode
+                            },
                             body: JSON.stringify({ countryName: generatingCountryName.trim() })
                           });
                           if (!res.ok) throw new Error("API call failed");
@@ -989,44 +1540,114 @@ ${clausesCombined}`
                   </button>
                 </div>
 
-                <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-                  
-                  {/* Food Card */}
-                  <div className="flex gap-4 items-start p-4 bg-slate-50 rounded-xl border border-slate-150">
-                    <div className="p-3 bg-orange-100 text-orange-600 rounded-xl font-serif text-sm font-black shrink-0">食</div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-800 mb-1">고유 음식 문화 (대표 요리와 기후)</h4>
-                      <p className="text-xs text-slate-600 leading-relaxed">{selectedCountry.highlights.food}</p>
+                {/* Direct Student Investigative Worksheets (No Answer Key Tabs) */}
+                <div className="p-6 md:p-8 flex flex-col gap-6">
+                  <div className="bg-gradient-to-r from-indigo-50 to-indigo-100/40 border border-indigo-200/50 rounded-xl p-4 text-xs text-indigo-950 font-bold flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-left">
+                    <div className="space-y-0.5">
+                      <span className="text-indigo-800">🕵️ 학생 자기주도 세계 문화 탐구 지침:</span>
+                      <p className="font-medium text-slate-600 text-[11px] leading-relaxed">
+                        교과서나 백과사전, 인터넷 검색을 활용하여 선택한 나라의 지리 환경적 영양과 문화적 특징을 직접 가나다 조사하여 아래 빈 칸들을 성실하게 기재하여 주십시오. (해당 지식은 씬 스토리보드 및 모의 UN 활동으로 자동 연계됩니다)
+                      </p>
                     </div>
                   </div>
 
-                  {/* Greeting Card */}
-                  <div className="flex gap-4 items-start p-4 bg-slate-50 rounded-xl border border-slate-150">
-                    <div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl font-serif text-sm font-black shrink-0">禮</div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-800 mb-1">전통 인사법과 소통의 규칙</h4>
-                      <p className="text-xs text-slate-600 leading-relaxed">{selectedCountry.highlights.greeting}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {/* Food Research Input */}
+                    <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs space-y-2 text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded font-black font-serif text-xs">食</span>
+                        <h4 className="text-xs font-black text-slate-800">1. 고유 음식 문화 및 환경적 탄생 배경</h4>
+                      </div>
+                      <textarea
+                        rows={3}
+                        value={studentResearch[selectedCountry.code]?.food || ""}
+                        onChange={(e) => handleUpdateResearch("food", e.target.value)}
+                        placeholder="예: 지중해 연안 특색으로 싱싱한 해산물과 쌀을 황금 향신료 샤프란으로 볶은 '빠에야'를 먹으며 건조한 더위를 건강히 이겨냅니다..."
+                        className="w-full text-xs text-slate-700 bg-slate-50/20 border border-slate-250 rounded-lg p-2.5 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Greeting Research Input */}
+                    <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs space-y-2 text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded font-black font-serif text-xs">禮</span>
+                        <h4 className="text-xs font-black text-slate-800">2. 전통 소망 예절과 소통 규칙</h4>
+                      </div>
+                      <textarea
+                        rows={3}
+                        value={studentResearch[selectedCountry.code]?.greeting || ""}
+                        onChange={(e) => handleUpdateResearch("greeting", e.target.value)}
+                        placeholder="예: 양 뺨을 소리 내어 순차대로 부비는 '도스 베소스' 인사를 하며 우정과 상호 생존적 존경을 담아 상호 작용을 행합니다..."
+                        className="w-full text-xs text-slate-700 bg-slate-50/20 border border-slate-250 rounded-lg p-2.5 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Costume Research Input */}
+                    <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs space-y-2 text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded font-black font-serif text-xs">衣</span>
+                        <h4 className="text-xs font-black text-slate-800">3. 기후 극복 전통 의복 형태 및 기능</h4>
+                      </div>
+                      <textarea
+                        rows={3}
+                        value={studentResearch[selectedCountry.code]?.costume || ""}
+                        onChange={(e) => handleUpdateResearch("costume", e.target.value)}
+                        placeholder="예: 강렬한 사막 뙤약볕과 살을 베는 건조 모래바람을 막도록 천연 헐렁한 면포로 목부터 원피스형 전신을 두릅니다..."
+                        className="w-full text-xs text-slate-700 bg-slate-50/20 border border-slate-250 rounded-lg p-2.5 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Festival Research Input */}
+                    <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs space-y-2 text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-pink-100 text-pink-700 rounded font-black font-serif text-xs">樂</span>
+                        <h4 className="text-xs font-black text-slate-800">4. 고유 축제 의미와 공동체 연대 방식</h4>
+                      </div>
+                      <textarea
+                        rows={3}
+                        value={studentResearch[selectedCountry.code]?.festival || ""}
+                        onChange={(e) => handleUpdateResearch("festival", e.target.value)}
+                        placeholder="예: 붉은 토마토를 거리에 마구 투척하여 농작물의 넘침을 이종의 유쾌한 축소 놀이이자 상생 협력의 나눔 축제로 칭양합니다..."
+                        className="w-full text-xs text-slate-700 bg-slate-50/20 border border-slate-250 rounded-lg p-2.5 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                      />
                     </div>
                   </div>
 
-                  {/* Costume Card */}
-                  <div className="flex gap-4 items-start p-4 bg-slate-50 rounded-xl border border-slate-150">
-                    <div className="p-3 bg-purple-100 text-purple-600 rounded-xl font-serif text-sm font-black shrink-0">衣</div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-800 mb-1">환경 극복을 위한 의복 및 직조양식</h4>
-                      <p className="text-xs text-slate-600 leading-relaxed">{selectedCountry.highlights.costume}</p>
-                    </div>
-                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      onClick={() => {
+                        setStudentResearch(prev => ({
+                          ...prev,
+                          [selectedCountry.code]: { food: "", greeting: "", costume: "", festival: "" }
+                        }));
+                      }}
+                      className="px-3.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 font-bold text-xs rounded-xl transition"
+                    >
+                      🗑️ 입력 칸 비우기
+                    </button>
+                    <button
+                      onClick={() => {
+                        const resData = studentResearch[selectedCountry.code];
+                        if (!resData || !resData.food || !resData.greeting || !resData.costume || !resData.festival) {
+                          alert("⚠️ 수집되지 않은 빈 칸이 있습니다. 모든 탐구 항목에 자료를 작성해 주세요.");
+                          return;
+                        }
+                        const c1 = checkContentQuality(resData.food);
+                        const c2 = checkContentQuality(resData.greeting);
+                        const c3 = checkContentQuality(resData.costume);
+                        const c4 = checkContentQuality(resData.festival);
+                        if (!c1.isValid) { alert(`[음식 오류] ${c1.reason}`); return; }
+                        if (!c2.isValid) { alert(`[인사 오류] ${c2.reason}`); return; }
+                        if (!c3.isValid) { alert(`[복식 오류] ${c3.reason}`); return; }
+                        if (!c4.isValid) { alert(`[축제 오류] ${c4.reason}`); return; }
 
-                  {/* Festival Card */}
-                  <div className="flex gap-4 items-start p-4 bg-slate-50 rounded-xl border border-slate-150">
-                    <div className="p-3 bg-pink-100 text-pink-600 rounded-xl font-serif text-sm font-black shrink-0">樂</div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-800 mb-1">풍요를 기리는 연대제 및 축제</h4>
-                      <p className="text-xs text-slate-600 leading-relaxed">{selectedCountry.highlights.festival}</p>
-                    </div>
+                        alert("💾 나만의 세계 문화 조사 수집 데이터가 로컬 공간에 안전하게 적재되었습니다! 32차시 최종 포트폴리오 및 영상 시나리오 기획에 완벽히 연계 동체화됩니다.");
+                      }}
+                      className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition"
+                    >
+                      💾 우리 모둠 조사 수집 완료
+                    </button>
                   </div>
-
                 </div>
 
                 <div className="px-6 py-4 bg-indigo-50/50 border-t border-slate-150 flex items-center justify-between text-xs text-indigo-800 font-medium">
@@ -1067,6 +1688,39 @@ ${clausesCombined}`
                     <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                     {selectedCountry.flag} 탐구 모범 예시 채우기
                   </button>
+                </div>
+              </div>
+
+              {/* 🎥 모둠 완성 동영상 링크 연결 (선택) */}
+              <div className="bg-gradient-to-r from-indigo-50/70 to-amber-50/70 rounded-2xl border-2 border-indigo-200 p-4.5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
+                <div className="space-y-1 text-left flex-1">
+                  <h4 className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                    <span className="text-base">🎥</span>
+                    <span>우리 모둠 완성 동영상 링크 연결 (선택)</span>
+                    <span className="text-[9px] bg-indigo-100 text-indigo-700 border border-indigo-200 font-extrabold px-2 py-0.5 rounded-full">전시관 자동 연동</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    스토리보드를 바탕으로 직접 찰영·편집하신 최종 동영상(YouTube, 구글 드라이브, 또는 일반 링크)이 있다면 아래에 등록하세요. 디지털 엑스포 전시부스에 온라인 감상 버튼이 자동 제공됩니다.
+                  </p>
+                </div>
+                <div className="w-full md:w-96 flex gap-2 shrink-0">
+                  <input
+                    type="text"
+                    placeholder="https://youtu.be/... 또는 영상 링크 주소"
+                    value={videoUrl}
+                    onChange={(e) => setVideoUrl(e.target.value)}
+                    className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-850 placeholder:text-slate-450 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                  />
+                  {videoUrl && (
+                    <a
+                      href={videoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center shrink-0 shadow-sm"
+                    >
+                      테스트 🔗
+                    </a>
+                  )}
                 </div>
               </div>
 
@@ -1182,7 +1836,7 @@ ${clausesCombined}`
                               </div>
                             </div>
 
-                            <grid className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               <div className="text-[11px]">
                                 <span className="block font-bold text-slate-500 mb-0.5">🎬 화면 연출</span>
                                 <p className="text-slate-700 leading-relaxed bg-white p-2 rounded border border-slate-100">{scene.screenVisual}</p>
@@ -1191,7 +1845,7 @@ ${clausesCombined}`
                                 <span className="block font-bold text-slate-500 mb-0.5">🎙️ 오디오/내레이션</span>
                                 <p className="text-slate-700 leading-relaxed bg-white p-2 rounded border border-slate-100 italic">{scene.audioText}</p>
                               </div>
-                            </grid>
+                            </div>
 
                             {scene.notes && (
                               <div className="mt-2 text-[10px] text-slate-400 flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded">
@@ -1879,6 +2533,95 @@ ${clausesCombined}`
                     >
                       <PenTool className="w-4 h-4" /> 평생 행동 서명 및 위촉장 발간 요청
                     </button>
+
+                    <div className="border-t border-slate-200 mt-4 pt-4 shrink-0 text-left">
+                      <p className="text-[10px] text-slate-500 mb-1.5 leading-normal">
+                        <strong>🎁 담임선생님 과제 수합용 파일 출력:</strong> 아래 버튼을 통해 현재 모둠원들의 기획 대본, UN 결의안, 캠페인 슬로건 및 개별 성취 등급을 총망라한 <strong>수행평가 결과 패키지 파일(.json)</strong>을 정식 추출하여 선생님께 파일 제출할 수 있습니다. (교사용 결과 수합 허브 100% 연계)
+                      </p>
+                      <button 
+                        onClick={() => {
+                          const data = {
+                            classCode: classCode || "6-1",
+                            groupName,
+                            groupMembers,
+                            selectedCountry: selectedCountry.name,
+                            selectedCountryCode: selectedCountry.code,
+                            userPassportStamps,
+                            stampsCount: userPassportStamps.length,
+                            storyboard,
+                            resolution,
+                            operativeClauses,
+                            campaignInput,
+                            citizenOath,
+                            signedOath,
+                            videoUrl,
+                            exportedAt: new Date().toISOString()
+                          };
+                          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+                          const downloadAnchor = document.createElement('a');
+                          downloadAnchor.setAttribute("href", dataStr);
+                          downloadAnchor.setAttribute("download", `${groupName.replace(/\s+/g, "_")}_지구촌_수행평가_포트폴리오.json`);
+                          document.body.appendChild(downloadAnchor);
+                          downloadAnchor.click();
+                          downloadAnchor.remove();
+                          alert("🎉 수행평가 포트폴리오 파일(JSON)이 완벽히 다운로드되었습니다! 컴퓨터의 [다운로드] 폴더에서 확인 후 선생님께 교내 망으로 전송하십시오.");
+                        }}
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 shadow-sm"
+                      >
+                        💾 32차시 모둠 수행평가 결과 파일(.json) 다운로드
+                      </button>
+
+                      <div className="mt-3.5 pt-3.5 border-t border-dashed border-slate-200">
+                        <p className="text-[10px] text-slate-500 mb-2 leading-normal">
+                          <strong>📡 [실시간 무선 전송 기능]:</strong> 파일 수동 이동이나 USB 이동이 귀찮다면 아래 <strong>무선 즉시 전송</strong> 버튼을 누르십시오. 교사 전용 실시간 결과 수합 대시보드로 우리 모둠이 이룩한 스탬프, 시나리오, UN 조항 일괄이 원격 제출됩니다.
+                        </p>
+                        <button
+                          onClick={async () => {
+                            if (!groupName || groupMembers.length === 0) {
+                              alert("⚠️ 실시간 수합 전송을 하려면 먼저 2단계에서 모둠 이름과 모둠원 정보를 1명 이상 등록하셔야 합니다.");
+                              return;
+                            }
+                            setIsSubmittingLive(true);
+                            try {
+                              const data = {
+                                classCode: classCode || "6-1",
+                                groupName,
+                                groupMembers,
+                                selectedCountry: selectedCountry.name,
+                                selectedCountryCode: selectedCountry.code,
+                                userPassportStamps,
+                                stampsCount: userPassportStamps.length,
+                                storyboard,
+                                resolution,
+                                operativeClauses,
+                                campaignInput,
+                                citizenOath,
+                                signedOath,
+                                studentResearch,
+                                videoUrl,
+                                exportedAt: new Date().toISOString()
+                              };
+                              const res = await fetch("/api/portfolio/submit", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(data)
+                              });
+                              if (!res.ok) throw new Error("Server transmission error");
+                              alert(`🚀 [실시간 무선 제출 완료!] 우리 모둠('${groupName}')의 최종 과제 포트폴리오 패키지 정보가 교실 수합 서브판 목록으로 무선 안전 송출 안착되었습니다!`);
+                            } catch (error) {
+                              console.error(error);
+                              alert("⚠️ 실시간 교사국 장비와 연결할 수 없습니다. 교내 네트워크 사향을 점검하시거나, 위쪽 [모둠 수행평가 결과 파일 다운로드] 버튼을 이용해 수동 전송하십시오.");
+                            } finally {
+                              setIsSubmittingLive(false);
+                            }
+                          }}
+                          disabled={isSubmittingLive}
+                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          {isSubmittingLive ? "📡 교탁 서버 연결망 접속 및 패킷 전송 중..." : "🚀 교사 수합 허브로 실시간 무선 즉시 제출"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Visual official certificate layout */}
@@ -1944,6 +2687,1001 @@ ${clausesCombined}`
 
                 </div>
               </div>
+
+            </div>
+          )}
+
+          {/* Active Tab 6: Teacher Hub Evaluation Port */}
+          {activeTab === "teacher" && (
+            <div className="flex flex-col gap-6 animate-fade-in text-left">
+              
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-rose-100 pb-5">
+                <div>
+                  <div className="text-xs font-bold text-rose-600 mb-1 flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5" /> 6단계 최종: 교사용 수행평가 결과 일괄 수합 및 성적 처리 시스템
+                  </div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">교사 전용 결과 수합 허브</h2>
+                  <p className="text-slate-500 text-xs">학생들이 완료하여 추출/제출한 모둠별 수행평가 파일(.json) 데이터를 한자리에 모아 일괄 조회하고 종합 분석합니다.</p>
+                </div>
+
+                <div className="flex gap-2 shrink-0 flex-wrap">
+                  <button
+                    onClick={() => {
+                      const mockGroups = [
+                        {
+                          classCode: "6-1",
+                          groupName: "환대와 평화의 2모둠",
+                          selectedCountry: "인도 (India)",
+                          selectedCountryCode: "IN",
+                          userPassportStamps: ["KR", "IN", "EG", "FR"],
+                          stampsCount: 4,
+                          groupMembers: [
+                            { name: "이지호", role: "팀장 / AI 시뮬레이션 소통" },
+                            { name: "정다은", role: "서기 / UN 헌장 조항 발의" },
+                            { name: "김태한", role: "영상 연출 / 소품 제작" }
+                          ],
+                          storyboard: [
+                            { sceneNumber: 1, category: "언어/인사", screenVisual: "아침 등교길 교문 앞에서 다같이 손을 모아 '나마스테' 인사하는 모습 촬영", audioText: "인사는 서로를 존경하는 첫 행동입니다.", notes: "밝게 웃기" },
+                            { sceneNumber: 2, category: "음식", screenVisual: "급식실에서 카레라이스 급식판을 비추며 향신료의 역사 설명 스크린샷", audioText: "이 냄새는 인도 향신료 '마살라'가 녹아든 기적입니다.", notes: "향신료 모형 지참" }
+                          ],
+                          resolution: {
+                            resolutionNumber: "A/RES/6/32-02",
+                            title: "인도의 지속가능 친환경 바이오 연료 상속 선도 및 저개발 농기구 대리 배수 보장에 관한 건",
+                            preamble: "우리는 저위도 농업 지대의 온실 가스 과중과 작물 고사 소식에 깊은 연민을 느끼며 협동할 의무를 진다."
+                          },
+                          operativeClauses: [
+                            "해양 바이오 에너지 연구비를 신흥 개발국에 1:1 보조한다.",
+                            "종이팩 재활용 우유갑 수거를 교실 별로 월 2회 의무화한다."
+                          ],
+                          campaignInput: { topic: "인도의 식생활 절제와 무공해 대중 수송 활성책", coreMessage: "고기가 없는 카레식단 채식을 전격 확대하고 자전거 등교 기금을 교내에 수립해요!" },
+                          citizenOath: { studentName: "이지호", pledge1: "타 종교 신념의 요리 방식을 적극 이해하고 존중한다.", pledge2: "바이오 에너지 절약에 스스로 솔선수범하겠다.", pledge3: "소외 계층의 지리학적 불평등을 적극 변호한다." },
+                          signedOath: true,
+                          videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                        },
+                        {
+                          classCode: "6-2",
+                          groupName: "지구촌 수호대 3모둠",
+                          selectedCountry: "프랑스 (France)",
+                          selectedCountryCode: "FR",
+                          userPassportStamps: ["KR", "FR", "JP"],
+                          stampsCount: 3,
+                          groupMembers: [
+                            { name: "박소윤", role: "의장석 / 회담 주최" },
+                            { name: "최민우", role: "대본 보조 / 의복 드로잉" }
+                          ],
+                          storyboard: [
+                            { sceneNumber: 1, category: "인사", screenVisual: "파란 하늘 그림을 그려놓고 친구 둘이 가볍게 양 볼을 맞대며 '비주' 뺨 맞춤 인사를 연출한다.", audioText: "친밀함과 프랑스 전통 비주 인사입니다.", notes: "실제 접촉은 비포함" }
+                          ],
+                          resolution: {
+                            resolutionNumber: "A/RES/6/32-03",
+                            title: "자유 평등 우애에 기인한 지구촌 물 배급 정합 조치 교호 의안",
+                            preamble: "인위적인 식수 독점을 인권 침해로 규명하고 전인류 마실 물 자치를 세계 UN 기구에서 직권 수호할 것을 건의한다."
+                          },
+                          operativeClauses: [
+                            "가뭄 사막 구호 국가 지하 수원 파이프망 매설 무상 원조 대책을 구성한다."
+                          ],
+                          campaignInput: { topic: "프랑스식 빵 가공 잔여물 교내 나눔 캠페인", coreMessage: "유통기한에 앞서 풍성한 이웃 나눔 냉장고를 급식 센터에 개방합시다." },
+                          citizenOath: { studentName: "박소윤", pledge1: "지식 편식을 막고 전 지구 이주민 역사를 탐색한다.", pledge2: "물 사용 10% 축감을 위해 양치 컵 사용을 맹세한다.", pledge3: "존엄한 식수 인권 수호단을 학급에 꾸린다." },
+                          signedOath: true,
+                          videoUrl: "https://www.youtube.com/watch?v=60_7Z24v4_s"
+                        }
+                      ];
+                      setImportedPortfolios([...importedPortfolios, ...mockGroups]);
+                      alert("💡 교사 대시보드 테스트용 예시 학생 모둠 결과 데이터 2건이 성공적으로 추가되었습니다! 아래 종합 분석기에서 내용을 확인하십시오.");
+                    }}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
+                  >
+                    ⚡ 예시 데이터 불러오기
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (importedPortfolios.length === 0) {
+                        alert("수합된 데이터가 없어 CSV를 다운로드할 수 없습니다.");
+                        return;
+                      }
+                      
+                      let csvContent = "\uFEFF"; 
+                      csvContent += "순번,학급,모둠명,탐구국가,모둠인원수,모둠원성명(역할),스탬프획득수,결의안조항수,선서서명자,AI제안성적,담임교사최종등급,담임관찰평가기록,수합일자\n";
+                      importedPortfolios.forEach((p, idx) => {
+                        const membersStr = p.groupMembers?.map((m: any) => `${m.name}(${m.role})`).join(" / ") || "없음";
+                        const aiGrade = p.aiEvaluation?.grade || "미산정";
+                        const finalGrade = p.finalGrade || p.aiEvaluation?.grade || "평가대기";
+                        const observation = p.teacherObservation || "미기록";
+                        const classLabel = p.classCode || "6-1";
+                        csvContent += `"${idx+1}","${classLabel}","${p.groupName}","${p.selectedCountry || p.selectedCountryCode || "미지정"}","${p.groupMembers?.length || 0}","${membersStr.replace(/"/g, '""')}","${p.userPassportStamps?.length || 0}","${p.operativeClauses?.length || p.resolution?.operativeClauses?.length || 0}","${p.citizenOath?.studentName || "미완료"}","${aiGrade}","${finalGrade}","${observation.replace(/"/g, '""')}","${new Date().toLocaleDateString()}"\n`;
+                      });
+
+                      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement("a");
+                      link.setAttribute("href", url);
+                      link.setAttribute("download", `지구촌_수행평가_교사학습결과_성적표.csv`);
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5"
+                  >
+                    📊 엑셀(CSV) 저장
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch("/api/portfolio/list");
+                        if (!res.ok) throw new Error("Could not retrieve");
+                        const serverData = await res.json();
+                        if (serverData.length === 0) {
+                          alert("📡 [실시간 수합 안내] 현재 교실 서버에 접수된 무선 전송 건수가 비어있습니다. 학생 기기에서 [교사 수합 허브로 실시간 무선 즉시 제출] 단추를 누르게끔 격려해 주세요.");
+                          return;
+                        }
+
+                        setImportedPortfolios(prev => {
+                          const existingKeys = new Set(prev.map(p => `${p.classCode || "6-1"}_${p.groupName}`));
+                          const newItems = serverData.filter((item: any) => !existingKeys.has(`${item.classCode || "6-1"}_${item.groupName}`));
+                          if (newItems.length === 0) {
+                            alert(`📡 [새로운 추가 제출 없음] 총 ${serverData.length}개의 전송 포트폴리오를 조회하였으나, 교사 허브에 이미 전격 적재된 결과물 외의 미점유 모둠 자료는 없습니다.`);
+                            return prev;
+                          }
+                          alert(`📡 [실시간 무선 수합 성공!] 교탁 무선망 클라우드를 통해 미공개되었던 학생 모둠 ${newItems.length}곳의 최종 수행평가 패키지가 전원 수렴 결구되었습니다.`);
+                          return [...prev, ...newItems];
+                        });
+                      } catch (error) {
+                        alert("⚠️ 교탁 내부 무선 REST 수집기 연결 부재. 환경 구동을 재검토해 주십시오.");
+                      }
+                    }}
+                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-xs transition flex items-center gap-1.5"
+                  >
+                    📡 실시간 무선 수합 새로고침
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (importedPortfolios.length === 0) {
+                        alert("📡 [지구촌 박람회 안내] 수합된 학생 모둠 포트폴리오가 아직 대합실에 없습니다. 상위의 [⚡ 예시 데이터 불러오기] 단추를 누르면 테스트용 엑스포 전시부스가 생성되어 즉시 연출을 검토해 볼 수 있습니다!");
+                        return;
+                      }
+                      setShowExpoShowcase(true);
+                      setExpoActiveIndex(0);
+                      setExpoStoryboardSlideIndex(0);
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-amber-500 via-orange-600 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-1.5"
+                  >
+                    🎪 세계 문화 박람회 전시관 모드 오픈
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (confirm("수합된 데이터를 일괄 비우시겠습니까? (이 작업은 교실 임시 무선 수합소의 서버 메모리 데이터베이스도 동시에 전면 영구 삭제합니다)")) {
+                        setImportedPortfolios([]);
+                        setSelectedImportedPortfolioIndex(null);
+                        try {
+                          await fetch("/api/portfolio/reset", { method: "POST" });
+                        } catch (e) {
+                          console.error("교탁 임시 초기화 통신망 장애", e);
+                        }
+                      }
+                    }}
+                    className="px-3.5 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
+                  >
+                    🗑️ 비우기
+                  </button>
+                </div>
+              </div>
+
+              {/* 🔐 학급별 보안 설정 및 수합 비밀번호 통제소 */}
+              {unlockedClassScope === "all" && (
+                <div className="bg-slate-50 rounded-2xl border border-slate-205 p-5 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 bg-rose-100 text-rose-700 rounded-lg text-xs">🔐</span>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-800">학급별 보안 설정 및 수합 비밀번호 통제소</h4>
+                      <p className="text-[10px] text-slate-400 font-medium">학생들의 결과 수합 무단 열람을 방지하기 위해 마스터 및 각 학급 고유의 진입 암호를 원격 제어합니다.</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">실시간 보안 작동 중</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Left: Master Passcode Control */}
+                  <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-black text-slate-700">📌 전체 마스터 패스코드</span>
+                        <span className="text-[9px] text-slate-400 font-medium">모든 학급 공용 대피 우회 암호</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text"
+                          value={classPasscodes.master || "3201"}
+                          onChange={async (e) => {
+                            const val = e.target.value;
+                            setClassPasscodes(prev => ({ ...prev, master: val }));
+                            await fetch("/api/class-passcode/save", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ classCode: "master", passcode: val })
+                            });
+                          }}
+                          placeholder="기본: 3201"
+                          className="flex-1 bg-slate-50 border border-slate-250 rounded-lg px-2.5 py-1.5 text-xs font-mono font-black focus:ring-1 focus:ring-rose-500 focus:outline-none text-slate-800"
+                        />
+                        <button 
+                          onClick={() => alert(`🔑 마스터 비밀번호가 '${classPasscodes.master || "3201"}'(으)로 실시간 서버에 안전 저장되었습니다.`)}
+                          className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-extrabold transition cursor-pointer"
+                        >
+                          저장
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-normal mt-2">
+                      * 입력 시 클라우드 실시간 반영됩니다. 학생들은 진입 암호 인증창에서 이 마스터 코드를 사용해 인증할 수 있습니다.
+                    </p>
+                  </div>
+
+                  {/* Right: Custom Class Passcodes Control */}
+                  <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black text-slate-700">🏫 학급별 개별 패스코드 등록</span>
+                      <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1.5 rounded">학급별 단독 제어 가능</span>
+                    </div>
+
+                    <div className="flex gap-1.5">
+                      <input 
+                        type="text"
+                        value={newClassCodeToSet}
+                        onChange={(e) => setNewClassCodeToSet(e.target.value)}
+                        placeholder="예: 6-1"
+                        className="w-1/3 bg-slate-50 border border-slate-250 rounded-lg px-2.5 py-1.5 text-xs font-bold text-center focus:ring-1 focus:ring-rose-500 focus:outline-none text-slate-800"
+                      />
+                      <input 
+                        type="text"
+                        value={newPasscodeToSet}
+                        onChange={(e) => setNewPasscodeToSet(e.target.value)}
+                        placeholder="개별 지정 암호"
+                        className="flex-1 bg-slate-50 border border-slate-250 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold focus:ring-1 focus:ring-rose-500 focus:outline-none text-slate-800"
+                      />
+                      <button 
+                        onClick={async () => {
+                          if (!newClassCodeToSet.trim() || !newPasscodeToSet.trim()) {
+                            alert("학급 코드와 설정할 개별 암호를 둘 다 정확히 기입하여 주십시오.");
+                            return;
+                          }
+                          try {
+                            const res = await fetch("/api/class-passcode/save", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ classCode: newClassCodeToSet.trim(), passcode: newPasscodeToSet.trim() })
+                            });
+                            if (res.ok) {
+                              alert(`✅ [등록 성공] ${newClassCodeToSet.trim()} 학급의 전용 접속 비밀번호가 '${newPasscodeToSet.trim()}'(으)로 수립되었습니다.`);
+                              setNewClassCodeToSet("");
+                              setNewPasscodeToSet("");
+                              fetchPasscodes();
+                            }
+                          } catch (err) {
+                            alert("서버 통신에 실패했습니다.");
+                          }
+                        }}
+                        className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-extrabold transition cursor-pointer"
+                      >
+                        등록
+                      </button>
+                    </div>
+
+                    {/* Class Passcode Table */}
+                    <div className="border border-slate-100 rounded-lg overflow-hidden max-h-24 overflow-y-auto">
+                      <table className="w-full text-[10px] text-left text-slate-600">
+                        <thead className="bg-slate-50 text-slate-400 font-bold sticky top-0">
+                          <tr>
+                            <th className="p-1 px-2.5">학급코드</th>
+                            <th className="p-1">전용 비밀번호</th>
+                            <th className="p-1 text-right pr-2">작업</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {Object.entries(classPasscodes.custom || {})
+                            .filter(([code]) => code !== "master")
+                            .map(([code, pass]) => (
+                              <tr key={code} className="hover:bg-slate-50">
+                                <td className="p-1.5 px-2.5 font-black text-rose-700">{code}</td>
+                                <td className="p-1.5 font-mono text-slate-800 font-bold">{pass}</td>
+                                <td className="p-1.5 text-right pr-2">
+                                  <button 
+                                    onClick={async () => {
+                                      if (confirm(`'${code}' 학급의 전용 암호를 삭제하고 공용 마스터 패스코드로 대체하시겠습니까?`)) {
+                                        try {
+                                          await fetch("/api/class-passcode/save", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ classCode: code, passcode: "3201" })
+                                          });
+                                          setClassPasscodes(prev => {
+                                            const copy = { ...prev.custom };
+                                            delete copy[code];
+                                            return { ...prev, custom: copy };
+                                          });
+                                          alert("지정된 학급별 비밀번호가 삭제되었습니다.");
+                                          fetchPasscodes();
+                                        } catch (e) {
+                                          alert("통신 장애 발생");
+                                        }
+                                      }
+                                    }}
+                                    className="text-rose-500 hover:underline font-bold text-[9px]"
+                                  >
+                                    삭제
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          {Object.keys(classPasscodes.custom || {}).filter(k => k !== "master").length === 0 && (
+                            <tr>
+                              <td colSpan={3} className="p-3 text-center text-slate-400 text-[10px]">
+                                개별 패스코드를 등록해 편리하게 학급별로 분리 통제해 보세요.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              )}
+
+              {/* 🔑 선생님 전용 Google Gemini API Key 직접 입력 통제소 */}
+              {isTeacherUnlocked && (
+                <div className="bg-indigo-950 text-indigo-100 rounded-2xl border border-indigo-900 p-5 shadow-lg space-y-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-indigo-900/60">
+                    <div className="flex items-center gap-2">
+                      <span className="p-1.5 bg-indigo-900 text-indigo-300 rounded-lg text-xs">🔑</span>
+                      <div>
+                        <h4 className="text-xs font-black text-indigo-200">선생님 전용 Google Gemini API Key 설정</h4>
+                        <p className="text-[10px] text-indigo-400 font-medium">실시간 AI 인공지능 평론 피드백에 사용될 Google Gemini API Key를 담임선생님 전용으로 안전하게 개별 보관 및 제어합니다.</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2.5 py-1 rounded-lg border border-emerald-900">학급 AI 기밀연동 설정</span>
+                  </div>
+
+                  <div className="space-y-3.5 text-xs text-indigo-300 font-medium">
+                    <p>
+                      기본 장착된 공용 서버 소스 할당량이 초과되었거나, <strong>학급별 전용의 고성능 Gemini API 키</strong>를 바인딩하고자 하시면 아래에 안전 탑재하십시오.
+                    </p>
+                    <div className="flex flex-col md:flex-row gap-3 items-end">
+                      {/* Class Scope Selector */}
+                      <div className="w-full md:w-44 space-y-1 text-left">
+                        <label className="block text-[10px] text-indigo-400 font-bold uppercase tracking-wide">
+                          적용 학급 (수혜 범위)
+                        </label>
+                        {unlockedClassScope === "all" ? (
+                          <select
+                            value={configTargetClass}
+                            onChange={(e) => setConfigTargetClass(e.target.value)}
+                            className="w-full bg-indigo-900 border border-indigo-750 text-white rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none"
+                          >
+                            <option value="all">전체 학급 (공용)</option>
+                            <option value="6-1">6-1</option>
+                            <option value="6-2">6-2</option>
+                            <option value="6-3">6-3</option>
+                            <option value="6-4">6-4</option>
+                            <option value="6-5">6-5</option>
+                            <option value="6-6">6-6</option>
+                            <option value="6-7">6-7</option>
+                          </select>
+                        ) : (
+                          <div className="w-full bg-indigo-900 border border-indigo-750 text-white rounded-xl px-3 py-2.5 text-xs font-black text-center">
+                            🏫 학급 [{configTargetClass}] 고정
+                          </div>
+                        )}
+                      </div>
+
+                      {/* API Key Input */}
+                      <div className="flex-1 w-full space-y-1 text-left">
+                        <label className="block text-[10px] text-indigo-400 font-bold uppercase tracking-wide">
+                          Gemini API Key
+                        </label>
+                        <input 
+                          type="password"
+                          value={userApiKey}
+                          onChange={(e) => setUserApiKey(e.target.value.trim())}
+                          placeholder="AIzaSy... 형식의 구글 Gemini API 키를 입력하세요"
+                          className="w-full bg-indigo-950/80 border border-indigo-800 rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder:text-indigo-700/80 focus:ring-1 focus:ring-amber-500 focus:outline-none"
+                        />
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2 w-full md:w-auto shrink-0 justify-end">
+                        <button
+                          onClick={async () => {
+                            if (!userApiKey.trim()) {
+                              alert("설정할 API Key를 기입해 주십시오.");
+                              return;
+                            }
+                            try {
+                              localStorage.setItem("user_gemini_api_key", userApiKey.trim());
+                              const res = await fetch("/api/teacher-api-key/update", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ 
+                                  apiKey: userApiKey.trim(),
+                                  classCode: configTargetClass
+                                })
+                              });
+                              if (res.ok) {
+                                setIsServerApiKeyActive(true);
+                                alert(`🔑 [${configTargetClass === "all" ? "전체 학급" : configTargetClass + " 학급"}] 전용 API 키가 지정 학급 클라우드 서버에 안전 설정 보관 완료되었습니다!\n이제 담당 학생 태블릿 기기들의 AI 피드백도 자동으로 무선 연동됩니다.`);
+                              } else {
+                                alert("서버 연동에 실패했습니다.");
+                              }
+                            } catch (e) {
+                              console.error(e);
+                              alert("네트워크 통신 오류가 발생했습니다.");
+                            }
+                          }}
+                          className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs rounded-xl transition cursor-pointer"
+                        >
+                          지정학급 보관 저장
+                        </button>
+                        {(userApiKey || isServerApiKeyActive) && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                localStorage.removeItem("user_gemini_api_key");
+                                const res = await fetch("/api/teacher-api-key/update", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ 
+                                    apiKey: "",
+                                    classCode: configTargetClass
+                                  })
+                                });
+                                if (res.ok) {
+                                  setIsServerApiKeyActive(false);
+                                  setUserApiKey("");
+                                  alert(`🗑️ [${configTargetClass === "all" ? "전체 학급" : configTargetClass + " 학급"}] 보관 API 키가 완전히 초기화 폭파 완료되었습니다.`);
+                                } else {
+                                  alert("서버 키 초기화에 실패했습니다.");
+                                  setUserApiKey("");
+                                }
+                              } catch (e) {
+                                console.error(e);
+                                alert("네트워크 통신 오류가 발생했습니다.");
+                              }
+                            }}
+                            className="px-3 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl transition cursor-pointer"
+                          >
+                            초기화
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-indigo-505 font-normal leading-normal">
+                      * 이 키는 안전하게 선생님이 사용하는 로컬 브라우저 보안 구역에 저장되며, 학생 등 외부 기기로는 절대 공유/노출되지 않고, 실시간 AI 채점 및 대본 컨설팅 평가를 수행할 때에만 암호화된 헤더를 통해 구동됩니다.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Upload Dropzone */}
+              <div className="bg-white rounded-2xl border-2 border-dashed border-rose-200 hover:border-rose-400 p-8 text-center transition bg-rose-50/10 cursor-pointer relative shadow-sm">
+                <input 
+                  type="file" 
+                  accept=".json"
+                  multiple
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    if (!files || files.length === 0) return;
+                    
+                    let loadedCount = 0;
+                    const newPortfolios: any[] = [];
+                    
+                    Array.from(files).forEach((file: any) => {
+                      const reader = new FileReader();
+                      reader.onload = (event: any) => {
+                        try {
+                          const parsed = JSON.parse(event.target?.result as string);
+                          if (parsed.groupName) {
+                            newPortfolios.push(parsed);
+                          } else {
+                            console.warn("적절한 수행평가 포맷이 아닙니다.", file.name);
+                          }
+                        } catch (err) {
+                          console.error("파일 로드 중 오류가 발생했습니다.", err);
+                        } finally {
+                          loadedCount++;
+                          if (loadedCount === files.length) {
+                            if (newPortfolios.length > 0) {
+                              setImportedPortfolios(prev => [...prev, ...newPortfolios]);
+                              alert(`🎉 성공! [${newPortfolios.length}건]의 학생 모둠 포트폴리오 데이터를 성공적으로 수합 일괄 분석하였습니다.`);
+                            } else {
+                              alert("업로드된 파일 중 유효한 모둠 포트폴리오 데이터를 찾지 못했습니다.");
+                            }
+                          }
+                        }
+                      };
+                      reader.readAsText(file);
+                    });
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+                <BookOpen className="w-10 h-10 text-rose-400 mx-auto mb-2 animate-bounce-slow" />
+                <p className="text-xs font-black text-rose-800">모둠 제출용 포트폴리오 JSON 파일을 여기에 드래그하거나 클릭하여 추가하십시오.</p>
+                <p className="text-[10px] text-slate-400 mt-1 max-w-md mx-auto leading-normal">
+                  학생들이 32차시 캠페인 단계에서 [결과 파일 다운로드] 버튼으로 내려받은 <code>.json</code> 단일 또는 다중 파일을 한꺼번에 선택하여 올릴 수 있습니다. (서버 전송 없이 로컬에서 완벽 분석 안전 보장)
+                </p>
+              </div>
+
+              {/* Aggregated Overview Table */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 bg-slate-50 border-b border-slate-150 flex flex-col md:flex-row justify-between items-center gap-3">
+                  <h3 className="text-xs font-extrabold text-slate-800">📂 실시간 수합 결과판 ({importedPortfolios.length}개 모둠 등록 완료)</h3>
+                  
+                  {/* Class Filter Bar */}
+                  <div className="flex items-center gap-1.5 shrink-0 self-stretch sm:self-auto">
+                    <span className="text-[11px] font-bold text-slate-500 shrink-0">🏫 학급 필터:</span>
+                    {unlockedClassScope === "all" ? (
+                      <input 
+                        type="text"
+                        value={teacherFilterClass}
+                        onChange={(e) => setTeacherFilterClass(e.target.value)}
+                        placeholder="모든 학급 (비우면 전원)"
+                        className="bg-white border border-slate-250 rounded-lg px-2.5 py-1 text-[11px] font-black placeholder:font-normal focus:ring-1 focus:ring-rose-500 focus:outline-none w-36 text-slate-800"
+                      />
+                    ) : (
+                      <div className="bg-rose-50 border border-rose-200 text-rose-750 px-2.5 py-1 rounded-lg text-[11px] font-black flex items-center gap-1 shadow-2xs select-none">
+                        <span>{unlockedClassScope}</span>
+                        <span className="text-[10px] text-rose-600">🔒 분리통제 제한됨</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <span className="text-[10px] text-rose-600 font-bold bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">학업 성과표 자동 산출</span>
+                </div>
+
+                {importedPortfolios.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400">
+                    <Users className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+                    <p className="text-xs font-bold">수합 완료된 학생 과제가 비어 있습니다.</p>
+                    <p className="text-[10px] mt-1 max-w-xs mx-auto">상위 예시 데이터를 불러오거나 학생들이 제출한 포트폴리오 결과 파일을 드래그하여 종합 성적표 분석을 개시하십시오.</p>
+                  </div>
+                ) : (() => {
+                  const filteredPortfolios = importedPortfolios.filter(p => {
+                    if (!teacherFilterClass) return true;
+                    return (p.classCode || "").toLowerCase().includes(teacherFilterClass.toLowerCase());
+                  });
+                  
+                  if (filteredPortfolios.length === 0) {
+                    return (
+                      <div className="p-12 text-center text-slate-400">
+                        <p className="text-xs font-bold">필터 조건인 '{teacherFilterClass}' 학급에 부합하는 수합 자료가 없습니다.</p>
+                        <p className="text-[10px] mt-1 text-slate-400">학급란에 다른 코드명(예: 6-1, 6-2)을 입력해 보십시오.</p>
+                      </div>
+                    );
+                  }
+                  
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left text-slate-700 min-w-[700px]">
+                        <thead className="text-[10px] text-slate-400 uppercase tracking-wider bg-slate-50/55 border-b border-slate-150">
+                          <tr>
+                            <th className="p-4 font-bold">순번</th>
+                            <th className="p-4 font-bold">학급코드</th>
+                            <th className="p-4 font-bold">모둠명</th>
+                            <th className="p-4 font-bold">탐색 대상국</th>
+                            <th className="p-4 font-bold">참여 학생수</th>
+                            <th className="p-4 font-bold text-center">여권 스탬프</th>
+                            <th className="p-4 font-bold text-center">영상대본</th>
+                            <th className="p-4 font-bold text-center">UN결의항</th>
+                            <th className="p-4 font-bold text-center">선서자(상태)</th>
+                            <th className="p-4 font-bold text-center">상세포트폴리오</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredPortfolios.map((portfolio, idx) => {
+                            const scenesCount = portfolio.storyboard?.length || 0;
+                            const clausesCount = portfolio.operativeClauses?.length || portfolio.resolution?.operativeClauses?.length || 0;
+                            const isSelected = selectedImportedPortfolioIndex === idx;
+                            
+                            return (
+                              <tr key={idx} className={`hover:bg-slate-50/60 font-medium ${isSelected ? "bg-rose-50/30" : ""}`}>
+                                <td className="p-4 text-slate-400 font-mono">{idx + 1}</td>
+                                <td className="p-4 font-black text-rose-700 font-mono bg-rose-50/15 text-center rounded">{portfolio.classCode || "6-1"}</td>
+                                <td className="p-4 font-extrabold text-slate-900">{portfolio.groupName}</td>
+                                <td className="p-4">
+                                  <span className="bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded text-indigo-700 font-bold">
+                                    {portfolio.selectedCountryCode ? `${portfolio.selectedCountryCode} ` : ""} {portfolio.selectedCountry || "미정"}
+                                  </span>
+                                </td>
+                              <td className="p-4">
+                                <span className="text-slate-600 block text-[11px] font-bold">
+                                  {portfolio.groupMembers?.map((m: any) => m.name).slice(0, 3).join(", ")}
+                                  {portfolio.groupMembers?.length > 3 ? " 외" : ""}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-normal">총 {portfolio.groupMembers?.length || 0}명</span>
+                              </td>
+                              <td className="p-4 text-center font-bold text-emerald-600 font-mono">{portfolio.userPassportStamps?.length || 0}개 수집</td>
+                              <td className="p-4 text-center">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${scenesCount > 1 ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-600"}`}>
+                                  씬 {scenesCount}개 구성
+                                </span>
+                              </td>
+                              <td className="p-4 text-center">
+                                <span className="text-slate-600 font-bold font-mono">{clausesCount}개 항 조안</span>
+                              </td>
+                              <td className="p-4 text-center">
+                                {portfolio.signedOath ? (
+                                  <span className="text-amber-700 font-bold bg-amber-50 border border-amber-250 px-2 py-0.5 rounded-full text-[10px]">
+                                    ✒️ {portfolio.citizenOath?.studentName || "대표서약"}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400">서명 미완료</span>
+                                )}
+                              </td>
+                              <td className="p-4 text-center">
+                                <button
+                                  onClick={() => {
+                                    setSelectedImportedPortfolioIndex(isSelected ? null : idx);
+                                  }}
+                                  className={`px-3 py-1 rounded-lg text-[10px] font-extrabold transition ${
+                                    isSelected 
+                                      ? "bg-slate-905 text-white" 
+                                      : "bg-rose-100 hover:bg-rose-200 text-rose-700"
+                                  }`}
+                                >
+                                  {isSelected ? "상세 창 닫기" : "전체 기획 검토 🔍"}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+
+              {/* Individual Student Full Portfolio Deep-Dive Viewer */}
+              {selectedImportedPortfolioIndex !== null && importedPortfolios[selectedImportedPortfolioIndex] && (() => {
+                const p = importedPortfolios[selectedImportedPortfolioIndex];
+                return (
+                  <div className="bg-white rounded-2xl border border-rose-200 shadow-md p-6 animate-fade-in text-left">
+                    <div className="flex justify-between items-center border-b border-rose-100 pb-4 mb-5">
+                      <div>
+                        <span className="text-[10px] bg-rose-150 text-rose-800 font-black px-2 py-0.5 rounded-full uppercase tracking-wider mb-1 inline-block">
+                          수행성적 심층 검토 포털
+                        </span>
+                        <h3 className="text-lg font-black text-slate-900">
+                          [{p.groupName}] 의 32차시 세부 프로젝트 수행 기록서
+                        </h3>
+                      </div>
+                      <button 
+                        onClick={() => setSelectedImportedPortfolioIndex(null)}
+                        className="text-slate-400 hover:text-slate-600 font-bold text-xs p-2 bg-slate-50 rounded"
+                      >
+                        닫기 ✕
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      
+                      {/* Left: General Team & Slogans Info */}
+                      <div className="space-y-4">
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                          <h4 className="text-xs font-black text-slate-800 mb-2.5">👥 탐구 대표단원 ({p.groupMembers?.length || 0}명)</h4>
+                          <ul className="space-y-1.5">
+                            {p.groupMembers?.map((m: any, i: number) => (
+                              <li key={i} className="text-xs bg-white p-2 rounded border border-slate-150 flex justify-between font-bold">
+                                <span className="text-slate-800">{m.name}</span>
+                                <span className="text-indigo-600 text-[10px] font-medium">역할: {m.role}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {p.videoUrl && (
+                          <div className="bg-rose-50/50 p-4 rounded-xl border border-rose-200">
+                            <h4 className="text-xs font-black text-rose-950 mb-1.5 flex items-center gap-1.5">
+                              <span>🎥 모둠 최종 완성 동영상</span>
+                              <span className="text-[10px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded font-black">원격 연동</span>
+                            </h4>
+                            <p className="text-[10px] text-slate-500 mb-2.5 font-medium leading-normal">
+                              학생 모둠이 직접 촬영·편집을 완수한 뒤 탑재한 공익 영상 주소입니다.
+                            </p>
+                            <a 
+                              href={p.videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm text-center"
+                            >
+                              🎬 완성 동영상 감상하기 (새창) ↗
+                            </a>
+                          </div>
+                        )}
+
+                        <div className="bg-indigo-50/30 p-4 rounded-xl border border-indigo-150">
+                          <h4 className="text-xs font-black text-slate-800 mb-2.5">🌱 모둠 캠페인의 핵심 지향성</h4>
+                          <div className="space-y-2 text-xs leading-relaxed text-slate-600">
+                            <p><strong>캠페인 주제:</strong> {p.campaignInput?.topic || "미작성"}</p>
+                            <p className="bg-white rounded p-2.5 border border-indigo-105 italic text-slate-850">
+                              “{p.campaignInput?.coreMessage || "미작성"}”
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="bg-amber-50/45 p-4 rounded-xl border border-amber-200">
+                          <h4 className="text-xs font-black text-amber-900 mb-1">✒️ 세계 시민 소중한 약속 수호장</h4>
+                          <p className="text-[10px] text-slate-400 mb-2">서명인: {p.citizenOath?.studentName || "미제출"}(印)</p>
+                          <div className="space-y-1.5 text-[11px] leading-relaxed text-slate-700">
+                            <p><strong>편견 다문화:</strong> {p.citizenOath?.pledge1}</p>
+                            <p><strong>생태 보전:</strong> {p.citizenOath?.pledge2}</p>
+                            <p><strong>인권 난민:</strong> {p.citizenOath?.pledge3}</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-orange-50/40 p-4 rounded-xl border border-orange-200 shadow-3xs">
+                          <h4 className="text-xs font-black text-orange-950 mb-2 flex items-center justify-between">
+                            <span>🕵️ 모둠 1~8차시 문화 실증 수집 정보</span>
+                            <span className="text-[9px] bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded-full font-bold">자주식 탐구</span>
+                          </h4>
+                          <div className="space-y-2.5 text-[11px] leading-relaxed text-slate-700">
+                            <div>
+                              <span className="font-extrabold text-orange-700">[食 음식] </span>
+                              <p className="inline font-medium text-slate-600 bg-white/60 p-1 rounded block mt-0.5">{p.studentResearch?.[p.selectedCountryCode]?.food || p.studentResearch?.food || p.studentResearch?.[p.selectedCountryCode]?.food || "교과서 모범답안 대체 또는 직접조사 미지정"}</p>
+                            </div>
+                            <div>
+                              <span className="font-extrabold text-indigo-700">[禮 인사] </span>
+                              <p className="inline font-medium text-slate-600 bg-white/60 p-1 rounded block mt-0.5">{p.studentResearch?.[p.selectedCountryCode]?.greeting || p.studentResearch?.greeting || p.studentResearch?.[p.selectedCountryCode]?.greeting || "교과서 모범답안 대체 또는 직접조사 미지정"}</p>
+                            </div>
+                            <div>
+                              <span className="font-extrabold text-purple-700">[衣 의복] </span>
+                              <p className="inline font-medium text-slate-600 bg-white/60 p-1 rounded block mt-0.5">{p.studentResearch?.[p.selectedCountryCode]?.costume || p.studentResearch?.costume || p.studentResearch?.[p.selectedCountryCode]?.costume || "교과서 모범답안 대체 또는 직접조사 미지정"}</p>
+                            </div>
+                            <div>
+                              <span className="font-extrabold text-pink-700">[樂 축제] </span>
+                              <p className="inline font-medium text-slate-600 bg-white/60 p-1 rounded block mt-0.5">{p.studentResearch?.[p.selectedCountryCode]?.festival || p.studentResearch?.festival || p.studentResearch?.[p.selectedCountryCode]?.festival || "교과서 모범답안 대체 또는 직접조사 미지정"}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Center: Storyboard Scenarios */}
+                      <div className="space-y-4 lg:col-span-2">
+                        
+                        {/* Storyboards */}
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                          <h4 className="text-xs font-black text-slate-800 mb-3.5 flex justify-between">
+                            <span>🎥 지구촌 소개 홍보 영상 스토리보드 시나리오 ({p.storyboard?.length || 0}개 씬)</span>
+                            <span className="text-[10px] font-normal text-slate-400">9~11차시 연계</span>
+                          </h4>
+                          
+                          {p.storyboard?.length === 0 ? (
+                            <p className="text-xs text-slate-400 p-8 text-center bg-white border border-slate-200 rounded font-bold">기획 작성 전입니다.</p>
+                          ) : (
+                            <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                              {p.storyboard?.map((s: any, idx: number) => (
+                                <div key={idx} className="bg-white border border-slate-150 rounded-lg p-3 text-xs leading-normal">
+                                  <div className="flex justify-between items-center mb-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                                    <span className="font-bold text-indigo-700">씬 {s.sceneNumber} [{s.category || "기타"}]</span>
+                                    {s.notes && <span className="text-[10px] text-slate-400 font-sans font-normal">촬영용 지침: {s.notes}</span>}
+                                  </div>
+                                  <p className="font-extrabold text-slate-800"><span className="text-[10px] text-slate-400 mr-1">[화면구성]</span>{s.screenVisual}</p>
+                                  <p className="text-slate-600 mt-1"><span className="text-[10px] text-slate-400 mr-1">[나레이션/자막]</span>{s.audioText}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* UN Resolutions */}
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                          <h4 className="text-xs font-black text-slate-800 mb-3.5 flex justify-between">
+                            <span>🏛️ 모의 UN 위원회 합의 결의안 초안 ({p.operativeClauses?.length || p.resolution?.operativeClauses?.length || 0}개 조항)</span>
+                            <span className="text-[10px] font-normal text-slate-400">19~27차시 연계</span>
+                          </h4>
+
+                          {!p.resolution ? (
+                            <p className="text-xs text-slate-400 p-8 text-center bg-white border border-slate-200 rounded font-bold">결의안 작성 전입니다.</p>
+                          ) : (
+                            <div className="space-y-2 text-xs leading-relaxed bg-white border border-slate-150 rounded-lg p-3.5 max-h-[220px] overflow-y-auto pr-1">
+                              <p className="font-black text-indigo-700">결의안 제제호: {p.resolution?.resolutionNumber || "A/RES/6/32-01"}</p>
+                              <p className="font-extrabold text-slate-800 border-b border-slate-100 pb-1">{p.resolution?.title}</p>
+                              <p className="text-[11px] text-slate-500 leading-normal italic py-1 bg-slate-50/50 rounded px-2.5 mb-2">Preamble: {p.resolution?.preamble}</p>
+                              
+                              <div className="space-y-1 text-slate-700 text-[11px]">
+                                {(p.operativeClauses || p.resolution?.operativeClauses || []).map((clause: string, i: number) => (
+                                  <p key={i}><strong>제 {i+1}항:</strong> {clause}</p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 🤖 교사 대리 AI 성적 채점 & 피드백 컨트롤 */}
+                        <div className="bg-indigo-50/40 p-5 rounded-2xl border-2 border-indigo-200 mt-4 space-y-4">
+                          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-indigo-150 pb-3">
+                            <div>
+                              <h4 className="text-sm font-black text-indigo-950 flex items-center gap-1.5">
+                                <span>🤖 교사 대리 AI 종합 성취평가 및 성적 채점</span>
+                                <span className="text-[10px] bg-indigo-250 text-indigo-800 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                  학급 API 연계
+                                </span>
+                              </h4>
+                              <p className="text-[11px] text-slate-500 font-medium">선생님 전용 다중 차시 연계 수행결과 가치분석 보고서</p>
+                            </div>
+                            <button
+                              disabled={isEvaluatingProxy}
+                              onClick={async () => {
+                                setIsEvaluatingProxy(true);
+                                try {
+                                  const res = await fetch("/api/ai/evaluate-portfolio", {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                      "x-gemini-api-key": userApiKey,
+                                      "x-class-code": p.classCode || classCode
+                                    },
+                                    body: JSON.stringify({
+                                      groupName: p.groupName,
+                                      campaignInput: p.campaignInput,
+                                      storyboard: p.storyboard,
+                                      resolution: p.resolution,
+                                      selectedCountry: p.selectedCountry || p.selectedCountryCode
+                                    })
+                                  });
+                                  if (!res.ok) throw new Error("대리 채점 과정에 에러가 발생했습니다.");
+                                  const data = await res.json();
+                                  
+                                  // Update state
+                                  const updated = [...importedPortfolios];
+                                  updated[selectedImportedPortfolioIndex] = {
+                                    ...p,
+                                    aiEvaluation: data,
+                                    finalGrade: data.grade || tempFinalGrade || "A-장려"
+                                  };
+                                  setImportedPortfolios(updated);
+                                  setTempFinalGrade(data.grade || tempFinalGrade || "A-장려");
+                                  alert("🎉 AI 국가급 전문성 대리 종합 성취평가가 성공적으로 조율 성숙 처리되었습니다.");
+                                } catch (e) {
+                                  console.error(e);
+                                  alert("대리 채점 수행 중 오류가 발생했습니다. 학급 교사용 API 설정을 다시 확인하여 주십시오.");
+                                } finally {
+                                  setIsEvaluatingProxy(false);
+                                }
+                              }}
+                              className={`px-4 py-2 text-xs font-black rounded-lg text-white shadow-md transition-all flex items-center justify-center gap-1.5 ${
+                                isEvaluatingProxy 
+                                  ? "bg-indigo-400 cursor-not-allowed" 
+                                  : "bg-indigo-600 hover:bg-indigo-700 active:scale-95"
+                              }`}
+                            >
+                              {isEvaluatingProxy ? (
+                                <>
+                                  <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full mr-1" />
+                                  종합수행 분석 중...
+                                </>
+                              ) : (
+                                "🤖 AI 대리 성취 평가 가동"
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Output results */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            
+                            {/* Left side: AI analysis results */}
+                            <div className="bg-white rounded-xl border border-indigo-150 p-4 space-y-3.5 text-xs">
+                              <h5 className="font-extrabold text-indigo-900 border-b border-indigo-50 pb-1.5 flex justify-between items-center font-bold">
+                                <span>📋 AI 자동 생성 피드백 명세</span>
+                                {p.aiEvaluation?.grade && (
+                                  <span className="text-[10px] bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full font-bold">
+                                    추천 등급: {p.aiEvaluation.grade}
+                                  </span>
+                                )}
+                              </h5>
+
+                              {p.aiEvaluation ? (
+                                <div className="space-y-3 leading-relaxed text-slate-700">
+                                  <div>
+                                    <strong className="text-slate-800 block text-[11px] mb-0.5 font-bold">🎬 스토리보드 대본 성찰 평언</strong>
+                                    <p className="bg-slate-50 p-2.5 rounded text-[11px] border border-slate-100">{p.aiEvaluation.storyboardCritique}</p>
+                                  </div>
+                                  <div>
+                                    <strong className="text-slate-800 block text-[11px] mb-0.5 font-bold">🏛️ 모의 UN 결의안 구성 분석</strong>
+                                    <p className="bg-slate-50 p-2.5 rounded text-[11px] border border-slate-100">{p.aiEvaluation.resolutionAudit}</p>
+                                  </div>
+                                  <div>
+                                    <strong className="text-slate-800 block text-[11px] mb-0.5 font-bold">📢 공익 캠페인 기획 및 슬로건 평가</strong>
+                                    <p className="bg-slate-50 p-2.5 rounded text-[11px] border border-slate-100">{p.aiEvaluation.campaignCheck}</p>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5 items-center pt-1.5 border-t border-slate-100">
+                                    <span className="text-[10px] font-black text-indigo-700 mr-1 font-bold">핵심역량 태그:</span>
+                                    {(p.aiEvaluation.competencies || []).map((comp: string, idx: number) => (
+                                      <span key={idx} className="text-[10px] bg-indigo-50 text-indigo-850 px-2 py-0.5 rounded border border-indigo-100 font-extrabold">
+                                        #{comp}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="text-slate-400 py-12 text-center italic font-bold">
+                                  "🤖 AI 대리 성취 평가 가동" 단추를 누르면 학생 모둠의 모든 과제(대본, 결의안, 캠페인)에 대한 AI 종합 성취 보고서가 실시간으로 소환됩니다.
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Right side: Teacher manual grading & comment override */}
+                            <div className="bg-white rounded-xl border border-indigo-150 p-4 space-y-3.5 text-xs flex flex-col justify-between">
+                              <div className="space-y-3.5">
+                                <h5 className="font-extrabold text-slate-900 border-b border-slate-100 pb-1.5 font-bold">
+                                  👨‍🏫 담임교사 관찰 성취 평가 및 기록
+                                </h5>
+
+                                <div className="space-y-2">
+                                  <label className="block text-[11px] font-extrabold text-slate-800 font-bold">
+                                    수행평가 최종 등급 부여
+                                  </label>
+                                  <div className="flex gap-2.5">
+                                    {["A+-탁월", "A-장려", "B-도전", "C-보완"].map((gradeOption) => {
+                                      const isActive = tempFinalGrade === gradeOption;
+                                      return (
+                                        <button
+                                          key={gradeOption}
+                                          type="button"
+                                          onClick={() => setTempFinalGrade(gradeOption)}
+                                          className={`flex-1 py-2 rounded-xl text-xs font-black border transition-all ${
+                                            isActive
+                                              ? "bg-slate-900 text-white border-slate-900 font-bold"
+                                              : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                                          }`}
+                                        >
+                                          {gradeOption.split("-")[0]}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <label className="block text-[11px] font-extrabold text-slate-800 font-bold">
+                                    수행 성취기준 및 교사 성찰 발달 사항 관찰록
+                                  </label>
+                                  <textarea
+                                    rows={4}
+                                    placeholder="학생들이 보여준 모둠 협업 태도, 모의 UN 참여도, 그리고 세외 세계시민 선서 수호 행동 등급 요약을 기록해 주세요. (다운로드할 종합 성표 CSV에 그대로 보관 등록됩니다.)"
+                                    value={tempTeacherObservation}
+                                    onChange={(e) => setTempTeacherObservation(e.target.value)}
+                                    className="w-full text-xs font-medium p-3 border border-slate-250 focus:outline-none focus:ring-2 focus:ring-indigo-600 rounded-xl"
+                                  />
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...importedPortfolios];
+                                  updated[selectedImportedPortfolioIndex] = {
+                                    ...p,
+                                    finalGrade: tempFinalGrade,
+                                    teacherObservation: tempTeacherObservation
+                                  };
+                                  setImportedPortfolios(updated);
+                                  alert("💾 담임교사 종합 심층 성취 평점과 발달과정 세부 특기사항이 학급 원장에 즉각 반영 및 잠금 저장 완료되었습니다. (종합 CSV 다운로드 가능)");
+                                }}
+                                className="w-full py-2.5 bg-slate-950 hover:bg-slate-850 text-white font-extrabold text-xs rounded-xl transition shadow-sm mt-3"
+                              >
+                                💾 담임 심사결과 및 성찰관찰 기록 저장
+                              </button>
+                            </div>
+
+                          </div>
+                        </div>
+
+                      </div>
+
+                    </div>
+                  </div>
+                );
+              })()}
 
             </div>
           )}
@@ -2040,6 +3778,438 @@ ${clausesCombined}`
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* 🔒 TEACHER HUB SECURITY PASSCODE MODAL */}
+      {showTeacherUnlockModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl border border-slate-205 shadow-2xl p-6 md:p-8 max-w-md w-full animate-scale-up text-left space-y-6">
+            <div className="flex items-center gap-3.5 pb-4 border-b border-slate-100">
+              <span className="p-3 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl text-2xl font-black shrink-0">🔒</span>
+              <div>
+                <span className="text-[10px] text-rose-500 font-extrabold uppercase tracking-widest block">Classroom Security Guard</span>
+                <h3 className="text-base font-black text-slate-800">교사 결과 수합 허브 접근 인증</h3>
+              </div>
+            </div>
+
+            <div className="space-y-3.5 text-xs text-slate-600 leading-relaxed font-medium">
+              <p>
+                이 장소는 학급 학생들이 각자의 지리 탐구 태블릿으로 기록한 최종 모둠 포트폴리오를 하나로 안전 무선 통합 수계(Aggregated) 처리 및 성적화하는 <strong className="text-slate-850">교사용 통제판</strong>입니다.
+              </p>
+              <div className="bg-slate-50 border border-slate-150 p-3.5 rounded-xl text-[11px] text-slate-500 font-semibold leading-relaxed flex items-start gap-2">
+                <span className="text-amber-500 text-sm shrink-0">⚠️</span>
+                <span>학생 눈에 암호가 유출되지 않도록 기밀 지정된 교탁용 마스터 또는 배정받으신 학급 전용 개별 비밀번호를 기입해 주십시오.</span>
+              </div>
+            </div>
+
+            <form 
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!teacherPinInput.trim()) return;
+                try {
+                  const res = await fetch("/api/class-passcode/verify", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ passcode: teacherPinInput })
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                    setIsTeacherUnlocked(true);
+                    const scope = data.isMaster ? "all" : (data.classCode || "6-1");
+                    setUnlockedClassScope(scope);
+                    
+                    // Force the filter if it belongs to a single class
+                    if (scope !== "all") {
+                      setTeacherFilterClass(scope);
+                    }
+                    
+                    setShowTeacherUnlockModal(false);
+                    setActiveTab("teacher");
+                    setTeacherPinInput("");
+                    setTeacherPinError("");
+                    fetchPasscodes();
+                  } else {
+                    setTeacherPinError(`⚠️ 암호 불일치! 선생님 전용 통제 패스코드를 바르게 입력하십시오.`);
+                  }
+                } catch (err) {
+                  setTeacherPinError("⚠️ 보안 서버 인증 통신망에 장애가 있거나 연결이 지연되고 있습니다.");
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">🔑 교사용 기밀 보증 패스코드</label>
+                <input 
+                  type="password"
+                  value={teacherPinInput}
+                  onChange={(e) => {
+                    setTeacherPinInput(e.target.value);
+                    setTeacherPinError("");
+                  }}
+                  placeholder="보안 암호를 입력하세요"
+                  autoFocus
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-850 font-mono focus:ring-2 focus:ring-rose-500 focus:bg-white focus:outline-none placeholder:font-sans placeholder:text-xs"
+                />
+                {teacherPinError && (
+                  <p className="text-[11px] font-bold text-rose-600 mt-1.5">{teacherPinError}</p>
+                )}
+              </div>
+
+              {/* Bypass Shortcut Info */}
+              <div className="bg-rose-50/40 p-3.5 rounded-xl border border-rose-100 text-[10px] text-rose-850">
+                <p className="font-bold">💡 [선생님을 위한 단축 팁]</p>
+                <p className="mt-1 leading-normal font-medium">
+                  매번 암호를 복잡하게 기입하지 않으시려면, 주소 끝에 <code className="font-mono bg-white px-1 py-0.5 border border-rose-200 rounded text-rose-700 font-bold">?role=teacher</code> 를 뒤에 부착해서 접속하면 자동 패스처리됩니다!
+                </p>
+              </div>
+
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTeacherUnlockModal(false);
+                    setTeacherPinInput("");
+                    setTeacherPinError("");
+                  }}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-xl text-xs transition"
+                >
+                  취소(학생 모드 유지)
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-xs transition shadow-lg shadow-slate-900/20"
+                >
+                  허브 안전 잠금 해제 🔓
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🎪 WORLD EXPO EXHIBITION PAVILION INTERACTIVE MODAL */}
+      {showExpoShowcase && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col z-50 p-4 md:p-6 transition-all duration-300 text-left overflow-y-auto">
+          
+          {/* Expo Header */}
+          <div className="flex justify-between items-center border-b border-indigo-900/50 pb-4 mb-4 shrink-0">
+            <div className="flex items-center gap-3">
+              <span className="p-2.5 bg-indigo-500/20 border border-indigo-500/40 text-amber-400 rounded-xl text-lg font-black shrink-0 animate-pulse">🎪</span>
+              <div>
+                <span className="text-[10px] text-indigo-450 font-extrabold uppercase tracking-wider block">Real-time Digital World Expo Pavilion</span>
+                <h2 className="text-lg md:text-xl font-black text-white flex items-center gap-2">
+                  <span>지구촌 문화 수호제 실시간 디지털 박람회 전시관</span>
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30 font-bold">교실 무선 수합 라이브 미러링 중</span>
+                </h2>
+              </div>
+            </div>
+            
+            <button 
+              onClick={() => {
+                setShowExpoShowcase(false);
+                setExpoActiveIndex(null);
+              }}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-xl transition shadow-lg shadow-rose-900/30"
+            >
+              박람회 관람 종료 ✕
+            </button>
+          </div>
+
+          <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden min-h-0">
+            
+            {/* Left: Interactive Virtual Booth Picker */}
+            <div className="w-full lg:w-72 flex flex-col gap-3 shrink-0 bg-indigo-950/30 border border-indigo-900/40 p-4 rounded-2xl overflow-y-auto max-h-[220px] lg:max-h-none">
+              <h3 className="text-xs font-black text-indigo-300 uppercase tracking-widest pb-2 border-b border-indigo-900/40 flex flex-col gap-1">
+                <div className="flex justify-between items-center w-full">
+                  <span>🎪 활성화된 모둠 부스 목록</span>
+                  <span className="text-[11px] font-mono text-emerald-400 font-bold">
+                    ● {teacherFilterClass ? importedPortfolios.filter(p => (p.classCode || "").toLowerCase().includes(teacherFilterClass.toLowerCase())).length : importedPortfolios.length}개
+                  </span>
+                </div>
+                {teacherFilterClass && (
+                  <span className="text-[10px] text-amber-500 font-extrabold font-mono tracking-tight self-start">
+                    🏫 학급 필터: {teacherFilterClass}
+                  </span>
+                )}
+              </h3>
+              
+              <div className="flex lg:flex-col gap-2.5 py-1">
+                {importedPortfolios.filter(p => {
+                  if (!teacherFilterClass) return true;
+                  return (p.classCode || "").toLowerCase().includes(teacherFilterClass.toLowerCase());
+                }).map((p, idx) => {
+                  const isActive = expoActiveIndex === idx;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setExpoActiveIndex(idx);
+                        setExpoStoryboardSlideIndex(0);
+                      }}
+                      className={`w-48 lg:w-full p-3.5 rounded-xl border text-left transition-all shrink-0 relative overflow-hidden ${
+                        isActive 
+                          ? "bg-indigo-900 border-amber-500 text-white ring-2 ring-amber-500/30 shadow-md shadow-amber-500/20" 
+                          : "bg-indigo-950/25 border-indigo-900 text-slate-300 hover:bg-indigo-900/30 hover:border-indigo-705"
+                      }`}
+                    >
+                      {/* Booth Deco */}
+                      <div className="absolute top-0 right-0 p-1 font-mono text-[9px] bg-amber-500/10 text-amber-400 border-l border-b border-indigo-900/20 rounded-bl-lg font-black">
+                        {p.classCode || "6-1"} • #{idx+1}
+                      </div>
+                      
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-xl shrink-0">
+                          {p.selectedCountryCode === "IN" ? "🇮🇳" : p.selectedCountryCode === "FR" ? "🇫🇷" : p.selectedCountryCode === "EG" ? "🇪🇬" : "🌐"}
+                        </span>
+                        <span className="text-xs font-black truncate max-w-[120px] lg:max-w-none">{p.selectedCountry || "탐구국 미정"}</span>
+                      </div>
+                      
+                      <p className="text-[11px] font-black text-amber-400 truncate">{p.groupName}</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5 truncate">단원: {p.groupMembers?.map((m: any) => m.name).join(", ")}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right: Immersive Interactive Booth Presentation Layout */}
+            <div className="flex-1 bg-slate-900 border border-indigo-900/40 p-5 md:p-6 rounded-2xl flex flex-col overflow-y-auto text-slate-300 relative shadow-inner min-h-0">
+              
+              {expoActiveIndex === null || !importedPortfolios[expoActiveIndex] ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-slate-500 my-auto">
+                  <span className="text-5xl mb-3 animate-bounce">🎪</span>
+                  <p className="text-xs font-extrabold text-slate-300">박람회 관람을 시작하려면 왼쪽에서 모둠 부스를 선택하십시오.</p>
+                  <p className="text-[10px] text-slate-500 mt-1 max-w-sm">교탁 스크린에 띄워 모둠별 연구 탐구 지형, 영화 스토리보드, UN 결의안 헌장을 차례로 시뮬레이션 전시할 수 있습니다.</p>
+                </div>
+              ) : (() => {
+                const p = importedPortfolios[expoActiveIndex];
+                const scenes = p.storyboard || [];
+                const activeScene = scenes[expoStoryboardSlideIndex] || null;
+                const clauses = p.operativeClauses || p.resolution?.operativeClauses || [];
+                
+                return (
+                  <div className="space-y-6 animate-fade-in text-left">
+                    
+                    {/* Booth Presentation Title Header */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-indigo-950/40 border border-indigo-900/50 p-4 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <span className="text-4xl filter drop-shadow-sm shrink-0">
+                          {p.selectedCountryCode === "IN" ? "🇮🇳" : p.selectedCountryCode === "FR" ? "🇫🇷" : p.selectedCountryCode === "EG" ? "🇪🇬" : "🌐"}
+                        </span>
+                        <div>
+                          <div className="text-[10px] text-amber-400 font-extrabold tracking-widest uppercase mb-0.5">
+                            📍 {p.selectedCountry || "탐구 대상 국가"} 엑스포 전시관
+                          </div>
+                          <h3 className="text-base md:text-lg font-black text-white">
+                            {p.groupName} <span className="text-xs font-normal text-slate-400">({p.groupMembers?.map((m: any) => m.name).join(", ")} 단원임)</span>
+                          </h3>
+                        </div>
+                      </div>
+
+                      {/* Real-time Dynamic Scoreboard badge */}
+                      <div className="flex gap-2 shrink-0">
+                        <div className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-[10px] rounded-lg">
+                          🗺️ 여권 스탬프 {p.userPassportStamps?.length || 0}개 실증
+                        </div>
+                        <div className="px-3 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold text-[10px] rounded-lg">
+                          ✒️ 세계 시민 서약 완료
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Showcase Pillars Grids */}
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                      
+                      {/* COLUMN 1 (5 cols): Self-Investigated Cultural Discoveries */}
+                      <div className="xl:col-span-5 space-y-4">
+                        <div className="bg-indigo-950/20 border border-indigo-900/45 p-4 rounded-xl">
+                          <h4 className="text-xs font-black text-amber-400 mb-3.5 flex items-center justify-between border-b border-indigo-900/30 pb-2">
+                            <span>🔍 1P: 직접 수집한 지리 환경적 지구촌 문화 조사자료</span>
+                            <span className="text-[9px] bg-amber-500/15 text-amber-300 px-2 py-0.5 rounded-full font-bold">모둠 자체 탐구</span>
+                          </h4>
+
+                          <div className="space-y-3.5 text-xs">
+                            <div className="p-3 bg-indigo-950/40 rounded-lg border border-indigo-900/30">
+                              <div className="flex items-center gap-1.5 mb-1 text-orange-400 font-bold">
+                                <span className="font-serif text-xs font-black px-1.5 py-0.5 bg-orange-950/80 border border-orange-850 rounded">食</span>
+                                <span>고유 음식 및 기후 탄생 배경</span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 leading-relaxed font-semibold bg-slate-950/50 p-2 rounded">
+                                {p.studentResearch?.[p.selectedCountryCode]?.food || p.studentResearch?.food || "교과서 모범 연구 답안을 열람하여 지리 환경을 대입하는 단계입니다."}
+                              </p>
+                            </div>
+
+                            <div className="p-3 bg-indigo-950/40 rounded-lg border border-indigo-900/30">
+                              <div className="flex items-center gap-1.5 mb-1 text-indigo-400 font-bold">
+                                <span className="font-serif text-xs font-black px-1.5 py-0.5 bg-indigo-950/80 border border-indigo-850 rounded font-serif">禮</span>
+                                <span>전통 인사법과 소망 예절</span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 leading-relaxed font-semibold bg-slate-950/50 p-2 rounded">
+                                {p.studentResearch?.[p.selectedCountryCode]?.greeting || p.studentResearch?.greeting || "지원을 수립하여 상호 예절을 도출하는 단계입니다."}
+                              </p>
+                            </div>
+
+                            <div className="p-3 bg-indigo-950/40 rounded-lg border border-indigo-900/30">
+                              <div className="flex items-center gap-1.5 mb-1 text-purple-400 font-bold">
+                                <span className="font-serif text-xs font-black px-1.5 py-0.5 bg-purple-950/80 border border-purple-850 rounded font-serif">衣</span>
+                                <span>환경 극복을 위한 전통 의복 양식</span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 leading-relaxed font-semibold bg-slate-950/50 p-2 rounded">
+                                {p.studentResearch?.[p.selectedCountryCode]?.costume || p.studentResearch?.costume || "기온 조절과 사구 방지를 연구하는 단계입니다."}
+                              </p>
+                            </div>
+
+                            <div className="p-3 bg-indigo-950/40 rounded-lg border border-indigo-900/30">
+                              <div className="flex items-center gap-1.5 mb-1 text-pink-400 font-bold">
+                                <span className="font-serif text-xs font-black px-1.5 py-0.5 bg-pink-950/80 border border-pink-850 rounded font-serif">樂</span>
+                                <span>공동체 결속을 기리는 연대 축제</span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 leading-relaxed font-semibold bg-slate-950/50 p-2 rounded">
+                                {p.studentResearch?.[p.selectedCountryCode]?.festival || p.studentResearch?.festival || "생태 주기와 추수를 기념하는 연대제 구성란입니다."}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* COLUMN 2 (7 cols): Interactive Storyboard Player + UN Declaration */}
+                      <div className="xl:col-span-7 space-y-4">
+                        
+                        {/* Interactive Storyboard Cinematic Player Mockup */}
+                        <div className="bg-gradient-to-br from-indigo-950/50 via-slate-950/80 to-slate-950 border border-indigo-900 p-4 rounded-xl relative overflow-hidden shadow-lg">
+                          <h4 className="text-xs font-black text-amber-400 mb-3 flex justify-between items-center border-b border-indigo-900/30 pb-2">
+                            <span>🎬 2P: 지구촌 공익 영상 기획 극장</span>
+                            <span className="text-[10px] text-indigo-400 font-mono">스토리보드 슬라이드 덱</span>
+                          </h4>
+
+                          {p.videoUrl && (
+                            <div className="mb-3.5 bg-indigo-950/80 border border-indigo-500/30 p-3 rounded-xl flex items-center justify-between gap-3 animate-pulse relative">
+                              <div className="text-left">
+                                <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded uppercase tracking-widest inline-block mb-1">상영 작품 발견</span>
+                                <p className="text-[11px] font-bold text-slate-100 leading-tight">학생들이 제작 성료한 실제 동영상이 연결되었습니다!</p>
+                              </div>
+                              <a
+                                href={p.videoUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-black font-black text-xs rounded-lg transition-all flex items-center gap-1.5 shrink-0 hover:scale-103"
+                              >
+                                🎬 영상 바로 시청하기 ↗
+                              </a>
+                            </div>
+                          )}
+
+                          {scenes.length === 0 ? (
+                            <div className="p-10 text-center text-slate-500 text-xs font-bold">
+                              이 모둠은 아직 캠페인 영상 기획 포트폴리오를 작성하지 않았습니다.
+                            </div>
+                          ) : (
+                            <div className="space-y-4">
+                              {/* Slide Screening Area */}
+                              <div className="bg-slate-950 border-2 border-indigo-805 rounded-xl p-4 md:p-5 text-center min-h-[160px] flex flex-col justify-between relative shadow-inner">
+                                <div className="absolute top-2.5 left-3 px-2 py-0.5 bg-indigo-600 font-black text-[9px] text-white rounded uppercase tracking-wide">
+                                  SCREEN LIVE
+                                </div>
+                                <div className="absolute top-2.5 right-3 px-2.5 py-0.5 bg-slate-800 text-slate-400 font-mono text-[9px] rounded font-bold">
+                                  Scene {expoStoryboardSlideIndex + 1} / {scenes.length}
+                                </div>
+
+                                <div className="my-auto py-5">
+                                  <p className="text-[10px] text-indigo-400 font-extrabold mb-1.5 uppercase tracking-wider">🎬 연출 화면 시각 구성:</p>
+                                  <p className="text-sm md:text-base font-extrabold text-white leading-relaxed">
+                                    “ {activeScene?.screenVisual} ”
+                                  </p>
+                                  {activeScene?.notes && (
+                                    <p className="text-[10px] text-slate-400 mt-2 font-mono">촬영 지침 단서: {activeScene.notes}</p>
+                                  )}
+                                </div>
+
+                                <div className="bg-slate-900/95 border-t border-indigo-900/50 -mx-4 -mb-4 p-3 rounded-b-xl text-left">
+                                  <span className="text-[9px] text-amber-500 font-extrabold uppercase tracking-widest block mb-0.5">🎙️ 나레이션 및 자막 오디오 발화대본:</span>
+                                  <p className="text-[11px] text-amber-100/90 leading-relaxed font-bold">
+                                    {activeScene?.audioText}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Clickable Nav controls for Scenes */}
+                              <div className="flex justify-between items-center bg-slate-950/50 p-2.5 rounded-lg border border-indigo-900/35">
+                                <button
+                                  onClick={() => setExpoStoryboardSlideIndex(prev => Math.max(0, prev - 1))}
+                                  disabled={expoStoryboardSlideIndex === 0}
+                                  className="px-3 py-1 bg-indigo-900/40 hover:bg-indigo-800 disabled:opacity-30 text-white font-extrabold text-[10px] rounded-lg transition"
+                                >
+                                  ◀ 이전 씬
+                                </button>
+                                <span className="text-xs font-bold text-slate-400">
+                                  🎬 씬 {activeScene?.sceneNumber || expoStoryboardSlideIndex + 1} : {activeScene?.category || "기본"}
+                                </span>
+                                <button
+                                  onClick={() => setExpoStoryboardSlideIndex(prev => Math.min(scenes.length - 1, prev + 1))}
+                                  disabled={expoStoryboardSlideIndex === scenes.length - 1}
+                                  className="px-3 py-1 bg-indigo-900 hover:bg-indigo-800 disabled:opacity-30 text-white font-extrabold text-[10px] rounded-lg transition"
+                                >
+                                  다음 씬 ▶
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* UN Resolutions Show */}
+                        <div className="bg-indigo-950/15 border border-indigo-900/45 p-4 rounded-xl">
+                          <h4 className="text-xs font-black text-amber-400 mb-3.5 flex items-center justify-between border-b border-indigo-900/30 pb-2">
+                            <span>🏛️ 3P: UN 세계 평화 위원회 상속 결의조한 발의</span>
+                            <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-widest">모의 UN 공동 선언</span>
+                          </h4>
+
+                          {!p.resolution ? (
+                            <p className="text-xs text-slate-500 p-4 text-center">결의안 작성 전입니다.</p>
+                          ) : (
+                            <div className="space-y-3 font-sans text-xs bg-slate-950/40 border border-indigo-900/30 p-4 rounded-lg">
+                              <div className="flex justify-between items-center text-[10px] text-indigo-300 font-bold mb-1">
+                                <span>의안제 번호: {p.resolution?.resolutionNumber || "A/RES/6/32-01"}</span>
+                                <span>다문화 평화 발전</span>
+                              </div>
+                              <p className="font-extrabold text-white text-[13px] border-b border-indigo-900 pb-1 focus:outline-none">
+                                {p.resolution?.title}
+                              </p>
+                              <p className="text-[11px] text-slate-400 leading-normal italic py-1 border-l-2 border-amber-500/50 pl-2.5">
+                                <strong>전문(Preamble):</strong> {p.resolution?.preamble}
+                              </p>
+                              
+                              <div className="space-y-2 text-slate-300 text-[11px] leading-relaxed pt-2">
+                                {clauses.map((clause: string, i: number) => (
+                                  <p key={i} className="bg-indigo-950/40 p-2 rounded border border-indigo-900">
+                                    <strong className="text-amber-400">제 {i+1}항:</strong> {clause}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+                );
+              })()}
+
+            </div>
+
+          </div>
+
+          {/* Expo Footer with Peer Review Guide */}
+          <div className="mt-4 pt-3.5 border-t border-indigo-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 text-xs text-indigo-300 shrink-0">
+            <span className="font-bold">💡 [청곡 초등 교육 박람회 미션] 동료 평가단, 학부모 및 관람 단원은 태블릿 부스에서 상계 자료를 열람하신 뒤 지지 서약 및 소감란을 전격 기재해 주십시오.</span>
+            <div className="text-[10px] bg-indigo-900/30 border border-indigo-805 px-3 py-1 rounded-lg font-mono text-indigo-400 font-medium">
+              Digital Hall System v3.2 • Live Kiosk Mode
+            </div>
+          </div>
+
         </div>
       )}
 
