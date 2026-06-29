@@ -4,6 +4,8 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import admin from "firebase-admin";
+import { getFirestore, Firestore } from "firebase-admin/firestore";
 
 dotenv.config();
 
@@ -28,6 +30,37 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+
+// Initialize Firebase Admin SDK
+let db: Firestore | null = null;
+try {
+  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+  let projectId = process.env.FIREBASE_PROJECT_ID;
+  let firestoreDatabaseId = undefined;
+
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    projectId = config.projectId;
+    firestoreDatabaseId = config.firestoreDatabaseId;
+  }
+
+  if (projectId) {
+    const options: admin.AppOptions = {
+      projectId: projectId
+    };
+    const appInstance = admin.initializeApp(options);
+    if (firestoreDatabaseId) {
+      db = getFirestore(appInstance, firestoreDatabaseId);
+    } else {
+      db = getFirestore(appInstance);
+    }
+    console.log(`[Firebase] Initialized Firestore successfully for project: ${projectId} (databaseId: ${firestoreDatabaseId || "default"})`);
+  } else {
+    console.warn("[Firebase] No firebase-applet-config.json or FIREBASE_PROJECT_ID found. Using in-memory fallback.");
+  }
+} catch (err) {
+  console.error("[Firebase] Initialization error:", err);
+}
 
 // Dynamic Gemini client setup, supporting optional runtime user-provided keys from Request headers
 let classTeacherApiKeys: Record<string, string> = {};
@@ -439,13 +472,53 @@ ${countryName}
   }
 });
 
-// Global in-memory storage for cross-device classroom aggregation
+// Global in-memory storage for cross-device classroom aggregation (acts as local cache/fallback)
 const classroomPortfolios = new Map<string, any>();
 
-// Class-specific passcode storage
+// Class-specific passcode storage (acts as local cache/fallback)
 const classroomPasscodes = new Map<string, string>([
   ["master", "3201"]
 ]);
+
+// Helper to sync all database records from Firestore into our local cache on startup
+async function syncFromFirestore() {
+  if (!db) return;
+  try {
+    console.log("[Firebase] Syncing database configurations from Firestore on startup...");
+    
+    // 1. Sync Teacher API Keys
+    const keysSnapshot = await db.collection("teacher_api_keys").get();
+    keysSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data && data.apiKey) {
+        classTeacherApiKeys[doc.id] = data.apiKey;
+      }
+    });
+    console.log(`[Firebase] Loaded ${keysSnapshot.size} teacher API keys from Firestore.`);
+
+    // 2. Sync Classroom Passcodes
+    const passcodesSnapshot = await db.collection("classroom_passcodes").get();
+    passcodesSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data && data.passcode) {
+        classroomPasscodes.set(doc.id, data.passcode);
+      }
+    });
+    console.log(`[Firebase] Loaded ${passcodesSnapshot.size} classroom passcodes from Firestore.`);
+
+    // 3. Sync Classroom Portfolios
+    const portfoliosSnapshot = await db.collection("classroom_portfolios").get();
+    portfoliosSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data) {
+        classroomPortfolios.set(doc.id, data);
+      }
+    });
+    console.log(`[Firebase] Loaded ${portfoliosSnapshot.size} student portfolios from Firestore.`);
+  } catch (err: any) {
+    console.error("[Firebase] Error performing initial database sync:", err);
+  }
+}
 
 // Route: Get all passcodes (Internal Teacher access)
 app.get("/api/class-passcode/list", (req, res) => {
@@ -456,14 +529,28 @@ app.get("/api/class-passcode/list", (req, res) => {
 });
 
 // Route: Save/Update a classroom passcode
-app.post("/api/class-passcode/save", (req, res) => {
+app.post("/api/class-passcode/save", async (req, res) => {
   const { classCode, passcode } = req.body;
   if (!passcode || passcode.trim().length === 0) {
     return res.status(400).json({ error: "올바른 암호를 기입하십시오." });
   }
   const trimmedCode = (classCode || "master").trim();
-  classroomPasscodes.set(trimmedCode, passcode.trim());
-  console.log(`[Security] Passcode for '${trimmedCode}' updated to '${passcode.trim()}'`);
+  const trimmedPasscode = passcode.trim();
+
+  // Update in-memory fallback cache
+  classroomPasscodes.set(trimmedCode, trimmedPasscode);
+  console.log(`[Security] Passcode for '${trimmedCode}' updated to '${trimmedPasscode}'`);
+
+  // Persist in Firebase Firestore
+  if (db) {
+    try {
+      await db.collection("classroom_passcodes").doc(trimmedCode).set({ passcode: trimmedPasscode });
+      console.log(`[Firebase] Saved passcode for class '${trimmedCode}' to Firestore.`);
+    } catch (err) {
+      console.error("[Firebase] Error saving passcode to Firestore:", err);
+    }
+  }
+
   res.json({ success: true });
 });
 
@@ -569,37 +656,77 @@ ${clausesText || "미작성"}
 });
 
 // Route: Submit group portfolio
-app.post("/api/portfolio/submit", (req, res) => {
+app.post("/api/portfolio/submit", async (req, res) => {
   const portfolio = req.body;
   if (!portfolio || !portfolio.groupName) {
     return res.status(400).json({ error: "모둠명이 입력되지 않았습니다." });
   }
   const classCodeVal = (portfolio.classCode || "6-1").trim();
   const groupKey = `${classCodeVal}_${portfolio.groupName.trim()}`;
-  classroomPortfolios.set(groupKey, {
+  
+  const payload = {
     ...portfolio,
     submittedAt: new Date().toISOString(),
     ip: req.ip || "unknown"
-  });
+  };
+
+  // Update local cache
+  classroomPortfolios.set(groupKey, payload);
   console.log(`[Submission] Portfolio received from: ${groupKey}`);
+
+  // Persist in Firebase Firestore
+  if (db) {
+    try {
+      await db.collection("classroom_portfolios").doc(groupKey).set(payload);
+      console.log(`[Firebase] Saved student portfolio '${groupKey}' to Firestore.`);
+    } catch (err) {
+      console.error("[Firebase] Error saving student portfolio to Firestore:", err);
+    }
+  }
+
   res.json({ success: true, count: classroomPortfolios.size });
 });
 
 // Route: Fetch aggregated portfolios
-app.get("/api/portfolio/list", (req, res) => {
+app.get("/api/portfolio/list", async (req, res) => {
+  // Read dynamically from Firebase Firestore if connected
+  if (db) {
+    try {
+      const snapshot = await db.collection("classroom_portfolios").get();
+      const list = snapshot.docs.map(doc => doc.data());
+      return res.json(list);
+    } catch (err) {
+      console.error("[Firebase] Error listing student portfolios from Firestore, falling back to local cache:", err);
+    }
+  }
   const list = Array.from(classroomPortfolios.values());
   res.json(list);
 });
 
 // Route: Reset classroom storage
-app.post("/api/portfolio/reset", (req, res) => {
+app.post("/api/portfolio/reset", async (req, res) => {
   classroomPortfolios.clear();
   console.log(`[Admin] Classroom portfolios storage has been reset.`);
+
+  if (db) {
+    try {
+      const snapshot = await db.collection("classroom_portfolios").get();
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      console.log("[Firebase] Successfully truncated classroom_portfolios in Firestore.");
+    } catch (err) {
+      console.error("[Firebase] Error resetting portfolios in Firestore:", err);
+    }
+  }
+
   res.json({ success: true });
 });
 
 // Route: Update teacher-configured API Key in server memory
-app.post("/api/teacher-api-key/update", (req, res) => {
+app.post("/api/teacher-api-key/update", async (req, res) => {
   const { apiKey, classCode } = req.body;
   const targetClass = (classCode || "all").trim();
   const trimmed = (apiKey || "").trim();
@@ -609,6 +736,21 @@ app.post("/api/teacher-api-key/update", (req, res) => {
     delete classTeacherApiKeys[targetClass];
   }
   console.log(`[Server API Key] Saved key for class [${targetClass}]: ${trimmed ? "ACTIVE" : "CLEARED"}`);
+
+  if (db) {
+    try {
+      const docRef = db.collection("teacher_api_keys").doc(targetClass);
+      if (trimmed) {
+        await docRef.set({ apiKey: trimmed });
+      } else {
+        await docRef.delete();
+      }
+      console.log(`[Firebase] Updated teacher API Key for '${targetClass}' in Firestore.`);
+    } catch (err) {
+      console.error("[Firebase] Error updating teacher API Key in Firestore:", err);
+    }
+  }
+
   res.json({ success: true, hasKey: !!classTeacherApiKeys[targetClass], classCode: targetClass });
 });
 
@@ -621,6 +763,9 @@ app.get("/api/teacher-api-key/status", (req, res) => {
 
 // Configure Vite integration or bundle
 async function startServer() {
+  // Sync configurations from Firestore on startup
+  await syncFromFirestore();
+
   const distPath = path.join(process.cwd(), "dist");
   const isProduction = process.env.NODE_ENV === "production" || fs.existsSync(path.join(distPath, "index.html"));
 
