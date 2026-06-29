@@ -48,6 +48,18 @@ try {
     const options: admin.AppOptions = {
       projectId: projectId
     };
+
+    // Support external hosting like Render via service account key environment variable
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      try {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+        options.credential = (admin as any).credential.cert(serviceAccount);
+        console.log("[Firebase] Using service account credentials from FIREBASE_SERVICE_ACCOUNT_KEY env variable.");
+      } catch (e) {
+        console.error("[Firebase] Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY environment variable. Proceeding with default credentials.", e);
+      }
+    }
+
     const appInstance = admin.initializeApp(options);
     if (firestoreDatabaseId) {
       db = getFirestore(appInstance, firestoreDatabaseId);
