@@ -4,8 +4,17 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
-import admin from "firebase-admin";
-import { getFirestore, Firestore } from "firebase-admin/firestore";
+import { initializeApp } from "firebase/app";
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  getDocs, 
+  setDoc, 
+  deleteDoc, 
+  writeBatch,
+  Firestore
+} from "firebase/firestore";
 
 dotenv.config();
 
@@ -31,42 +40,25 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Initialize Firebase Admin SDK
+// Initialize Firebase using the Client JS SDK (no private service account JSON needed, safe for Render/external hosting)
 let db: Firestore | null = null;
 try {
   const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-  let projectId = process.env.FIREBASE_PROJECT_ID;
-  let firestoreDatabaseId = undefined;
-
   if (fs.existsSync(configPath)) {
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    projectId = config.projectId;
-    firestoreDatabaseId = config.firestoreDatabaseId;
-  }
-
-  if (projectId) {
-    const options: admin.AppOptions = {
-      projectId: projectId
+    const appInstance = initializeApp(config);
+    db = getFirestore(appInstance);
+    console.log(`[Firebase] Initialized Client Firestore successfully for project: ${config.projectId}`);
+  } else if (process.env.FIREBASE_PROJECT_ID) {
+    const config = {
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      apiKey: process.env.FIREBASE_API_KEY,
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+      appId: process.env.FIREBASE_APP_ID
     };
-
-    // Support external hosting like Render via service account key environment variable
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      try {
-        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-        options.credential = (admin as any).credential.cert(serviceAccount);
-        console.log("[Firebase] Using service account credentials from FIREBASE_SERVICE_ACCOUNT_KEY env variable.");
-      } catch (e) {
-        console.error("[Firebase] Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY environment variable. Proceeding with default credentials.", e);
-      }
-    }
-
-    const appInstance = admin.initializeApp(options);
-    if (firestoreDatabaseId) {
-      db = getFirestore(appInstance, firestoreDatabaseId);
-    } else {
-      db = getFirestore(appInstance);
-    }
-    console.log(`[Firebase] Initialized Firestore successfully for project: ${projectId} (databaseId: ${firestoreDatabaseId || "default"})`);
+    const appInstance = initializeApp(config);
+    db = getFirestore(appInstance);
+    console.log(`[Firebase] Initialized Client Firestore successfully from environment for project: ${config.projectId}`);
   } else {
     console.warn("[Firebase] No firebase-applet-config.json or FIREBASE_PROJECT_ID found. Using in-memory fallback.");
   }
@@ -499,7 +491,7 @@ async function syncFromFirestore() {
     console.log("[Firebase] Syncing database configurations from Firestore on startup...");
     
     // 1. Sync Teacher API Keys
-    const keysSnapshot = await db.collection("teacher_api_keys").get();
+    const keysSnapshot = await getDocs(collection(db, "teacher_api_keys"));
     keysSnapshot.forEach(doc => {
       const data = doc.data();
       if (data && data.apiKey) {
@@ -509,7 +501,7 @@ async function syncFromFirestore() {
     console.log(`[Firebase] Loaded ${keysSnapshot.size} teacher API keys from Firestore.`);
 
     // 2. Sync Classroom Passcodes
-    const passcodesSnapshot = await db.collection("classroom_passcodes").get();
+    const passcodesSnapshot = await getDocs(collection(db, "classroom_passcodes"));
     passcodesSnapshot.forEach(doc => {
       const data = doc.data();
       if (data && data.passcode) {
@@ -519,7 +511,7 @@ async function syncFromFirestore() {
     console.log(`[Firebase] Loaded ${passcodesSnapshot.size} classroom passcodes from Firestore.`);
 
     // 3. Sync Classroom Portfolios
-    const portfoliosSnapshot = await db.collection("classroom_portfolios").get();
+    const portfoliosSnapshot = await getDocs(collection(db, "classroom_portfolios"));
     portfoliosSnapshot.forEach(doc => {
       const data = doc.data();
       if (data) {
@@ -556,7 +548,7 @@ app.post("/api/class-passcode/save", async (req, res) => {
   // Persist in Firebase Firestore
   if (db) {
     try {
-      await db.collection("classroom_passcodes").doc(trimmedCode).set({ passcode: trimmedPasscode });
+      await setDoc(doc(db, "classroom_passcodes", trimmedCode), { passcode: trimmedPasscode });
       console.log(`[Firebase] Saved passcode for class '${trimmedCode}' to Firestore.`);
     } catch (err) {
       console.error("[Firebase] Error saving passcode to Firestore:", err);
@@ -689,7 +681,7 @@ app.post("/api/portfolio/submit", async (req, res) => {
   // Persist in Firebase Firestore
   if (db) {
     try {
-      await db.collection("classroom_portfolios").doc(groupKey).set(payload);
+      await setDoc(doc(db, "classroom_portfolios", groupKey), payload);
       console.log(`[Firebase] Saved student portfolio '${groupKey}' to Firestore.`);
     } catch (err) {
       console.error("[Firebase] Error saving student portfolio to Firestore:", err);
@@ -704,7 +696,7 @@ app.get("/api/portfolio/list", async (req, res) => {
   // Read dynamically from Firebase Firestore if connected
   if (db) {
     try {
-      const snapshot = await db.collection("classroom_portfolios").get();
+      const snapshot = await getDocs(collection(db, "classroom_portfolios"));
       const list = snapshot.docs.map(doc => doc.data());
       return res.json(list);
     } catch (err) {
@@ -722,8 +714,8 @@ app.post("/api/portfolio/reset", async (req, res) => {
 
   if (db) {
     try {
-      const snapshot = await db.collection("classroom_portfolios").get();
-      const batch = db.batch();
+      const snapshot = await getDocs(collection(db, "classroom_portfolios"));
+      const batch = writeBatch(db);
       snapshot.docs.forEach(doc => {
         batch.delete(doc.ref);
       });
@@ -751,11 +743,11 @@ app.post("/api/teacher-api-key/update", async (req, res) => {
 
   if (db) {
     try {
-      const docRef = db.collection("teacher_api_keys").doc(targetClass);
+      const docRef = doc(db, "teacher_api_keys", targetClass);
       if (trimmed) {
-        await docRef.set({ apiKey: trimmed });
+        await setDoc(docRef, { apiKey: trimmed });
       } else {
-        await docRef.delete();
+        await deleteDoc(docRef);
       }
       console.log(`[Firebase] Updated teacher API Key for '${targetClass}' in Firestore.`);
     } catch (err) {
