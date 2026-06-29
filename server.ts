@@ -47,8 +47,12 @@ try {
   if (fs.existsSync(configPath)) {
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
     const appInstance = initializeApp(config);
-    db = getFirestore(appInstance);
-    console.log(`[Firebase] Initialized Client Firestore successfully for project: ${config.projectId}`);
+    if (config.firestoreDatabaseId) {
+      db = getFirestore(appInstance, config.firestoreDatabaseId);
+    } else {
+      db = getFirestore(appInstance);
+    }
+    console.log(`[Firebase] Initialized Client Firestore successfully for project: ${config.projectId} (databaseId: ${config.firestoreDatabaseId || "default"})`);
   } else if (process.env.FIREBASE_PROJECT_ID) {
     const config = {
       projectId: process.env.FIREBASE_PROJECT_ID,
@@ -57,8 +61,12 @@ try {
       appId: process.env.FIREBASE_APP_ID
     };
     const appInstance = initializeApp(config);
-    db = getFirestore(appInstance);
-    console.log(`[Firebase] Initialized Client Firestore successfully from environment for project: ${config.projectId}`);
+    if (process.env.FIREBASE_DATABASE_ID) {
+      db = getFirestore(appInstance, process.env.FIREBASE_DATABASE_ID);
+    } else {
+      db = getFirestore(appInstance);
+    }
+    console.log(`[Firebase] Initialized Client Firestore successfully from environment for project: ${config.projectId} (databaseId: ${process.env.FIREBASE_DATABASE_ID || "default"})`);
   } else {
     console.warn("[Firebase] No firebase-applet-config.json or FIREBASE_PROJECT_ID found. Using in-memory fallback.");
   }
