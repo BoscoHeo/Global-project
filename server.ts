@@ -44,21 +44,12 @@ app.use(express.json());
 let db: Firestore | null = null;
 try {
   const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-  if (fs.existsSync(configPath)) {
-    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    const appInstance = initializeApp(config);
-    if (config.firestoreDatabaseId) {
-      db = getFirestore(appInstance, config.firestoreDatabaseId);
-    } else {
-      db = getFirestore(appInstance);
-    }
-    console.log(`[Firebase] Initialized Client Firestore successfully for project: ${config.projectId} (databaseId: ${config.firestoreDatabaseId || "default"})`);
-  } else if (process.env.FIREBASE_PROJECT_ID) {
+  if (process.env.FIREBASE_PROJECT_ID) {
     const config = {
       projectId: process.env.FIREBASE_PROJECT_ID,
-      apiKey: process.env.FIREBASE_API_KEY,
-      authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-      appId: process.env.FIREBASE_APP_ID
+      apiKey: process.env.FIREBASE_API_KEY || "",
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT_ID}.firebaseapp.com`,
+      appId: process.env.FIREBASE_APP_ID || ""
     };
     const appInstance = initializeApp(config);
     if (process.env.FIREBASE_DATABASE_ID) {
@@ -67,6 +58,15 @@ try {
       db = getFirestore(appInstance);
     }
     console.log(`[Firebase] Initialized Client Firestore successfully from environment for project: ${config.projectId} (databaseId: ${process.env.FIREBASE_DATABASE_ID || "default"})`);
+  } else if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    const appInstance = initializeApp(config);
+    if (config.firestoreDatabaseId) {
+      db = getFirestore(appInstance, config.firestoreDatabaseId);
+    } else {
+      db = getFirestore(appInstance);
+    }
+    console.log(`[Firebase] Initialized Client Firestore successfully for project: ${config.projectId} (databaseId: ${config.firestoreDatabaseId || "default"})`);
   } else {
     console.warn("[Firebase] No firebase-applet-config.json or FIREBASE_PROJECT_ID found. Using in-memory fallback.");
   }
