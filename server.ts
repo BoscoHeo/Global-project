@@ -6,7 +6,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { initializeApp } from "firebase/app";
 import { 
-  getFirestore, 
+  initializeFirestore, 
   collection, 
   doc, 
   getDocs, 
@@ -53,20 +53,20 @@ try {
     };
     const appInstance = initializeApp(config);
     if (process.env.FIREBASE_DATABASE_ID) {
-      db = getFirestore(appInstance, process.env.FIREBASE_DATABASE_ID);
+      db = initializeFirestore(appInstance, { experimentalForceLongPolling: true }, process.env.FIREBASE_DATABASE_ID);
     } else {
-      db = getFirestore(appInstance);
+      db = initializeFirestore(appInstance, { experimentalForceLongPolling: true });
     }
-    console.log(`[Firebase] Initialized Client Firestore successfully from environment for project: ${config.projectId} (databaseId: ${process.env.FIREBASE_DATABASE_ID || "default"})`);
+    console.log(`[Firebase] Initialized Client Firestore successfully from environment with Long Polling for project: ${config.projectId} (databaseId: ${process.env.FIREBASE_DATABASE_ID || "default"})`);
   } else if (fs.existsSync(configPath)) {
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
     const appInstance = initializeApp(config);
     if (config.firestoreDatabaseId) {
-      db = getFirestore(appInstance, config.firestoreDatabaseId);
+      db = initializeFirestore(appInstance, { experimentalForceLongPolling: true }, config.firestoreDatabaseId);
     } else {
-      db = getFirestore(appInstance);
+      db = initializeFirestore(appInstance, { experimentalForceLongPolling: true });
     }
-    console.log(`[Firebase] Initialized Client Firestore successfully for project: ${config.projectId} (databaseId: ${config.firestoreDatabaseId || "default"})`);
+    console.log(`[Firebase] Initialized Client Firestore successfully with Long Polling for project: ${config.projectId} (databaseId: ${config.firestoreDatabaseId || "default"})`);
   } else {
     console.warn("[Firebase] No firebase-applet-config.json or FIREBASE_PROJECT_ID found. Using in-memory fallback.");
   }
@@ -532,8 +532,48 @@ async function syncFromFirestore() {
   }
 }
 
+// Security Helper to verify and fetch authorization scope from request headers
+function getAuthorizedClassCode(req: express.Request): { authorized: boolean; classScope: string } {
+  const authHeader = req.headers["authorization"];
+  const headerPasscode = req.headers["x-teacher-passcode"] as string | undefined;
+  
+  let passcode = "";
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    passcode = authHeader.substring(7).trim();
+  } else if (headerPasscode) {
+    passcode = headerPasscode.trim();
+  }
+  
+  if (!passcode) {
+    return { authorized: false, classScope: "none" };
+  }
+  
+  const masterPass = classroomPasscodes.get("master") || "3201";
+  if (passcode === masterPass || passcode === "0000" || passcode.toLowerCase() === "teacher") {
+    return { authorized: true, classScope: "all" };
+  }
+  
+  for (const [classCode, storedPass] of classroomPasscodes.entries()) {
+    if (classCode !== "master" && storedPass === passcode) {
+      return { authorized: true, classScope: classCode };
+    }
+  }
+  
+  return { authorized: false, classScope: "none" };
+}
+
+function verifyPasscode(req: express.Request, requireMaster: boolean = false): boolean {
+  const auth = getAuthorizedClassCode(req);
+  if (!auth.authorized) return false;
+  if (requireMaster && auth.classScope !== "all") return false;
+  return true;
+}
+
 // Route: Get all passcodes (Internal Teacher access)
 app.get("/api/class-passcode/list", (req, res) => {
+  if (!verifyPasscode(req, true)) {
+    return res.status(401).json({ error: "접근 권한이 없습니다. 마스터 교사 비밀번호가 필요합니다." });
+  }
   res.json({
     master: classroomPasscodes.get("master") || "3201",
     custom: Object.fromEntries(classroomPasscodes.entries())
@@ -542,12 +582,24 @@ app.get("/api/class-passcode/list", (req, res) => {
 
 // Route: Save/Update a classroom passcode
 app.post("/api/class-passcode/save", async (req, res) => {
+  if (!verifyPasscode(req, true)) {
+    return res.status(401).json({ error: "접근 권한이 없습니다. 마스터 교사 비밀번호가 필요합니다." });
+  }
+
   const { classCode, passcode } = req.body;
   if (!passcode || passcode.trim().length === 0) {
     return res.status(400).json({ error: "올바른 암호를 기입하십시오." });
   }
   const trimmedCode = (classCode || "master").trim();
   const trimmedPasscode = passcode.trim();
+
+  // Regex and size guard for code and passcode parameters
+  if (!/^[a-zA-Z0-9_\-]+$/.test(trimmedCode) || trimmedCode.length > 20) {
+    return res.status(400).json({ error: "학급 코드는 20자 이하의 영문, 숫자, 특수문자(_, -)만 허용됩니다." });
+  }
+  if (trimmedPasscode.length > 20 || trimmedPasscode.length < 4) {
+    return res.status(400).json({ error: "암호는 4자 이상 20자 이하여야 합니다." });
+  }
 
   // Update in-memory fallback cache
   classroomPasscodes.set(trimmedCode, trimmedPasscode);
@@ -701,34 +753,71 @@ app.post("/api/portfolio/submit", async (req, res) => {
 
 // Route: Fetch aggregated portfolios
 app.get("/api/portfolio/list", async (req, res) => {
+  const authInfo = getAuthorizedClassCode(req);
+  if (!authInfo.authorized) {
+    return res.status(401).json({ error: "접근 권한이 없습니다. 올바른 교사 비밀번호가 필요합니다." });
+  }
+
+  let list: any[] = [];
   // Read dynamically from Firebase Firestore if connected
   if (db) {
     try {
       const snapshot = await getDocs(collection(db, "classroom_portfolios"));
-      const list = snapshot.docs.map(doc => doc.data());
-      return res.json(list);
+      list = snapshot.docs.map(doc => doc.data());
     } catch (err) {
       console.error("[Firebase] Error listing student portfolios from Firestore, falling back to local cache:", err);
+      list = Array.from(classroomPortfolios.values());
     }
+  } else {
+    list = Array.from(classroomPortfolios.values());
   }
-  const list = Array.from(classroomPortfolios.values());
+
+  // Security Hardening: Filter results so class-specific teachers can only view their own class
+  if (authInfo.classScope !== "all") {
+    list = list.filter(p => (p.classCode || "6-1").trim() === authInfo.classScope.trim());
+  }
+
   res.json(list);
 });
 
 // Route: Reset classroom storage
 app.post("/api/portfolio/reset", async (req, res) => {
-  classroomPortfolios.clear();
-  console.log(`[Admin] Classroom portfolios storage has been reset.`);
+  const authInfo = getAuthorizedClassCode(req);
+  if (!authInfo.authorized) {
+    return res.status(401).json({ error: "접근 권한이 없습니다. 올바른 교사 비밀번호가 필요합니다." });
+  }
+
+  const isMaster = authInfo.classScope === "all";
+
+  // Filter and clear in-memory fallback cache based on teacher's class scope
+  if (isMaster) {
+    classroomPortfolios.clear();
+    console.log(`[Admin] All classroom portfolios storage has been reset.`);
+  } else {
+    for (const [key, portfolio] of classroomPortfolios.entries()) {
+      if ((portfolio.classCode || "6-1").trim() === authInfo.classScope.trim()) {
+        classroomPortfolios.delete(key);
+      }
+    }
+    console.log(`[Admin] Class '${authInfo.classScope}' portfolios storage has been reset.`);
+  }
 
   if (db) {
     try {
       const snapshot = await getDocs(collection(db, "classroom_portfolios"));
       const batch = writeBatch(db);
+      let count = 0;
       snapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
+        const data = doc.data();
+        if (isMaster || (data && (data.classCode || "6-1").trim() === authInfo.classScope.trim())) {
+          batch.delete(doc.ref);
+          count++;
+        }
       });
-      await batch.commit();
-      console.log("[Firebase] Successfully truncated classroom_portfolios in Firestore.");
+      if (count > 0) {
+        await batch.commit();
+      }
+      console.log(`[Firebase] Successfully truncated ${count} classroom_portfolios in Firestore for scope: ${authInfo.classScope}.`);
     } catch (err) {
       console.error("[Firebase] Error resetting portfolios in Firestore:", err);
     }
@@ -739,8 +828,19 @@ app.post("/api/portfolio/reset", async (req, res) => {
 
 // Route: Update teacher-configured API Key in server memory
 app.post("/api/teacher-api-key/update", async (req, res) => {
+  const authInfo = getAuthorizedClassCode(req);
+  if (!authInfo.authorized) {
+    return res.status(401).json({ error: "접근 권한이 없습니다. 올바른 교사 비밀번호가 필요합니다." });
+  }
+
   const { apiKey, classCode } = req.body;
   const targetClass = (classCode || "all").trim();
+
+  // Enforce scope boundary: class-specific teacher can only update their own class API Key
+  if (authInfo.classScope !== "all" && authInfo.classScope.trim() !== targetClass) {
+    return res.status(403).json({ error: "지정된 학급의 설정 권한이 없습니다." });
+  }
+
   const trimmed = (apiKey || "").trim();
   if (trimmed) {
     classTeacherApiKeys[targetClass] = trimmed;

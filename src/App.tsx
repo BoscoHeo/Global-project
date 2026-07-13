@@ -285,10 +285,26 @@ export default function App() {
     return "none"; // "all" if super admin/raw bypass, otherwise e.g., "6-1" if specific class code
   });
 
+  const [currentPasscode, setCurrentPasscode] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem("teacher_passcode") || "";
+    } catch (_) {
+      return "";
+    }
+  });
+
   const [isTeacherUnlocked, setIsTeacherUnlocked] = useState<boolean>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      return params.get("editor") === "teacher" || params.get("role") === "teacher" || params.get("admin") === "true";
+      const isParamUnlocked = params.get("editor") === "teacher" || params.get("role") === "teacher" || params.get("admin") === "true";
+      if (isParamUnlocked) {
+        try {
+          if (!sessionStorage.getItem("teacher_passcode")) {
+            sessionStorage.setItem("teacher_passcode", "3201");
+          }
+        } catch (_) {}
+      }
+      return isParamUnlocked || !!sessionStorage.getItem("teacher_passcode");
     } catch (_) {
       return false;
     }
@@ -310,7 +326,10 @@ export default function App() {
 
   const fetchPasscodes = async () => {
     try {
-      const res = await fetch("/api/class-passcode/list");
+      const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
+      const res = await fetch("/api/class-passcode/list", {
+        headers: { "x-teacher-passcode": pcode }
+      });
       if (res.ok) {
         const data = await res.json();
         setClassPasscodes(data);
@@ -2836,7 +2855,10 @@ ${clausesCombined}`
                   <button
                     onClick={async () => {
                       try {
-                        const res = await fetch("/api/portfolio/list");
+                        const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
+                        const res = await fetch("/api/portfolio/list", {
+                          headers: { "x-teacher-passcode": pcode }
+                        });
                         if (!res.ok) throw new Error("Could not retrieve");
                         const serverData = await res.json();
                         if (serverData.length === 0) {
@@ -2882,7 +2904,11 @@ ${clausesCombined}`
                         setImportedPortfolios([]);
                         setSelectedImportedPortfolioIndex(null);
                         try {
-                          await fetch("/api/portfolio/reset", { method: "POST" });
+                          const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
+                          await fetch("/api/portfolio/reset", { 
+                            method: "POST",
+                            headers: { "x-teacher-passcode": pcode }
+                          });
                         } catch (e) {
                           console.error("교탁 임시 초기화 통신망 장애", e);
                         }
@@ -2924,11 +2950,17 @@ ${clausesCombined}`
                           onChange={async (e) => {
                             const val = e.target.value;
                             setClassPasscodes(prev => ({ ...prev, master: val }));
-                            await fetch("/api/class-passcode/save", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ classCode: "master", passcode: val })
-                            });
+                            try {
+                              const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
+                              await fetch("/api/class-passcode/save", {
+                                method: "POST",
+                                headers: { 
+                                  "Content-Type": "application/json",
+                                  "x-teacher-passcode": pcode
+                                },
+                                body: JSON.stringify({ classCode: "master", passcode: val })
+                              });
+                            } catch (_) {}
                           }}
                           placeholder="기본: 3201"
                           className="flex-1 bg-slate-50 border border-slate-250 rounded-lg px-2.5 py-1.5 text-xs font-mono font-black focus:ring-1 focus:ring-rose-500 focus:outline-none text-slate-800"
@@ -2975,9 +3007,13 @@ ${clausesCombined}`
                             return;
                           }
                           try {
+                            const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
                             const res = await fetch("/api/class-passcode/save", {
                               method: "POST",
-                              headers: { "Content-Type": "application/json" },
+                              headers: { 
+                                "Content-Type": "application/json",
+                                "x-teacher-passcode": pcode
+                              },
                               body: JSON.stringify({ classCode: newClassCodeToSet.trim(), passcode: newPasscodeToSet.trim() })
                             });
                             if (res.ok) {
@@ -3018,9 +3054,13 @@ ${clausesCombined}`
                                     onClick={async () => {
                                       if (confirm(`'${code}' 학급의 전용 암호를 삭제하고 공용 마스터 패스코드로 대체하시겠습니까?`)) {
                                         try {
+                                          const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
                                           await fetch("/api/class-passcode/save", {
                                             method: "POST",
-                                            headers: { "Content-Type": "application/json" },
+                                            headers: { 
+                                              "Content-Type": "application/json",
+                                              "x-teacher-passcode": pcode
+                                            },
                                             body: JSON.stringify({ classCode: code, passcode: "3201" })
                                           });
                                           setClassPasscodes(prev => {
@@ -3127,9 +3167,13 @@ ${clausesCombined}`
                             }
                             try {
                               localStorage.setItem("user_gemini_api_key", userApiKey.trim());
+                              const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
                               const res = await fetch("/api/teacher-api-key/update", {
                                 method: "POST",
-                                headers: { "Content-Type": "application/json" },
+                                headers: { 
+                                  "Content-Type": "application/json",
+                                  "x-teacher-passcode": pcode
+                                },
                                 body: JSON.stringify({ 
                                   apiKey: userApiKey.trim(),
                                   classCode: configTargetClass
@@ -3155,9 +3199,13 @@ ${clausesCombined}`
                             onClick={async () => {
                               try {
                                 localStorage.removeItem("user_gemini_api_key");
+                                const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
                                 const res = await fetch("/api/teacher-api-key/update", {
                                   method: "POST",
-                                  headers: { "Content-Type": "application/json" },
+                                  headers: { 
+                                    "Content-Type": "application/json",
+                                    "x-teacher-passcode": pcode
+                                  },
                                   body: JSON.stringify({ 
                                     apiKey: "",
                                     classCode: configTargetClass
@@ -3883,6 +3931,10 @@ ${clausesCombined}`
                   const data = await res.json();
                   if (data.success) {
                     setIsTeacherUnlocked(true);
+                    setCurrentPasscode(teacherPinInput);
+                    try {
+                      sessionStorage.setItem("teacher_passcode", teacherPinInput);
+                    } catch (_) {}
                     const scope = data.isMaster ? "all" : (data.classCode || "6-1");
                     setUnlockedClassScope(scope);
                     

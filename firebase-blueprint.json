@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "ClassroomPasscode": {
+      "title": "Classroom Passcode",
+      "description": "Access control passcode for a specific class or master admin",
+      "type": "object",
+      "properties": {
+        "passcode": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 20,
+          "description": "Secure access PIN/passcode string"
+        }
+      },
+      "required": ["passcode"]
+    },
+    "ClassroomPortfolio": {
+      "title": "Classroom Portfolio",
+      "description": "Aggregated student group submission containing learning outcomes",
+      "type": "object",
+      "properties": {
+        "groupName": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Name of the student team/group"
+        },
+        "classCode": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Target classroom identifier"
+        },
+        "selectedCountry": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Country selected for foreign study"
+        },
+        "submittedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of wireless submission"
+        },
+        "ip": {
+          "type": "string",
+          "description": "Origin submission IP"
+        }
+      },
+      "required": ["groupName", "classCode"]
+    },
+    "TeacherApiKey": {
+      "title": "Teacher API Key",
+      "description": "Teacher-provided Google Gemini API key mapped to a specific class",
+      "type": "object",
+      "properties": {
+        "apiKey": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Teacher's custom Gemini API key"
+        }
+      },
+      "required": ["apiKey"]
+    }
+  },
+  "firestore": {
+    "/classroom_passcodes/{classCode}": {
+      "schema": {
+        "$ref": "#/entities/ClassroomPasscode"
+      },
+      "description": "Stores security PIN/passcodes for administrative and class-level authentication"
+    },
+    "/classroom_portfolios/{portfolioId}": {
+      "schema": {
+        "$ref": "#/entities/ClassroomPortfolio"
+      },
+      "description": "Stores student group learning outcomes, portfolios, and evaluations"
+    },
+    "/teacher_api_keys/{classCode}": {
+      "schema": {
+        "$ref": "#/entities/TeacherApiKey"
+      },
+      "description": "Stores class-specific custom Gemini API Keys provided by teachers"
+    }
+  }
+}
