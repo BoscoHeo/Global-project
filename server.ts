@@ -492,6 +492,14 @@ const classroomPasscodes = new Map<string, string>([
   ["master", "3201"]
 ]);
 
+// Class-specific assigned continent storage (acts as local cache/fallback)
+const classroomContinents = new Map<string, string>([
+  ["6-1", "아시아 (Asia)"],
+  ["6-2", "유럽 (Europe)"],
+  ["6-3", "아프리카 (Africa)"],
+  ["6-4", "남아메리카 (South America)"]
+]);
+
 // Helper to sync all database records from Firestore into our local cache on startup
 async function syncFromFirestore() {
   if (!db) return;
@@ -518,7 +526,17 @@ async function syncFromFirestore() {
     });
     console.log(`[Firebase] Loaded ${passcodesSnapshot.size} classroom passcodes from Firestore.`);
 
-    // 3. Sync Classroom Portfolios
+    // 3. Sync Classroom Continents
+    const continentsSnapshot = await getDocs(collection(db, "classroom_continents"));
+    continentsSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data && data.continent) {
+        classroomContinents.set(doc.id, data.continent);
+      }
+    });
+    console.log(`[Firebase] Loaded ${continentsSnapshot.size} classroom continents from Firestore.`);
+
+    // 4. Sync Classroom Portfolios
     const portfoliosSnapshot = await getDocs(collection(db, "classroom_portfolios"));
     portfoliosSnapshot.forEach(doc => {
       const data = doc.data();
@@ -641,6 +659,38 @@ app.post("/api/class-passcode/verify", (req, res) => {
   }
 
   res.json({ success: false, error: "암호가 올바르지 않습니다." });
+});
+
+// Route: Get all class assigned continents
+app.get("/api/class-continent/list", (req, res) => {
+  res.json({
+    custom: Object.fromEntries(classroomContinents.entries())
+  });
+});
+
+// Route: Save/Update a classroom assigned continent
+app.post("/api/class-continent/save", async (req, res) => {
+  const { classCode, continent } = req.body;
+  const trimmedCode = (classCode || "6-1").trim();
+  const trimmedContinent = (continent || "전체").trim();
+
+  if (!/^[a-zA-Z0-9_\-]+$/.test(trimmedCode) || trimmedCode.length > 20) {
+    return res.status(400).json({ error: "학급 코드는 20자 이하의 영문, 숫자, 특수문자만 허용됩니다." });
+  }
+
+  classroomContinents.set(trimmedCode, trimmedContinent);
+  console.log(`[Continent] Class '${trimmedCode}' continent updated to '${trimmedContinent}'`);
+
+  if (db) {
+    try {
+      await setDoc(doc(db, "classroom_continents", trimmedCode), { continent: trimmedContinent });
+      console.log(`[Firebase] Saved continent '${trimmedContinent}' for class '${trimmedCode}' to Firestore.`);
+    } catch (err) {
+      console.error("[Firebase] Error saving classroom continent to Firestore:", err);
+    }
+  }
+
+  res.json({ success: true, classCode: trimmedCode, continent: trimmedContinent });
 });
 
 // Route: Evaluate aggregated portfolio on behalf of teacher

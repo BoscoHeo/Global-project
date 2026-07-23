@@ -24,10 +24,12 @@ import {
   Heart, 
   LogOut 
 } from "lucide-react";
-import { EvaluationLevel, TopicType, StoryboardScene, CountryInfo, StampData, GroupMember } from "./types";
+import { EvaluationLevel, TopicType, StoryboardScene, CountryInfo, StampData, GroupMember, OfflineBoothPlan } from "./types";
 
 // Pre-seeded rich world culture data for academic research & quizzes (13~18차시)
+// Each of the 6 continents contains at least 4 detailed sample countries for classroom assignments
 const SEEDED_COUNTRIES: CountryInfo[] = [
+  // --- 1. 아시아 (Asia) - 4개국 ---
   {
     code: "KR",
     name: "대한민국 (South Korea)",
@@ -58,34 +60,94 @@ const SEEDED_COUNTRIES: CountryInfo[] = [
     ]
   },
   {
-    code: "BR",
-    name: "브라질 (Brazil)",
-    continent: "남아메리카 (South America)",
-    flag: "🇧🇷",
-    description: "뜨거운 햇살 and 이국적인 야생 삼림, 지구의 허파 아마존 및 열정적인 삼바 댄스를 보유한 다문화 공존 국가입니다.",
+    code: "IN",
+    name: "인도 (India)",
+    continent: "아시아 (Asia)",
+    flag: "🇮🇳",
+    description: "수많은 종교와 사상, 유서 깊은 타지마할, 다채로운 자연 속에서 조화로운 정신문화를 꽃피운 세계 인구 대국입니다.",
     highlights: {
-      food: "검은색 콩과 고기를 온종일 부드럽게 끓여 풍성한 쌀밥과 곁들이는 서민 고유 영양식 '페이조아다'.",
-      greeting: "가볍게 뺨을 가까이 맞대며 반가운 휘파람이나 뽀뽀 소리를 정답게 주고받습니다.",
-      costume: "화려한 타조 깃털과 번쩍이는 크리스탈 장식을 달아 열정적인 리듬을 뽐내는 '삼바 카니발 특수 드레스'가 대표적입니다.",
-      festival: "지구상 최대 가두 행진인 '리우 카니발'. 매년 2월 드넓은 야외 공연장 메트로폴을 삼바 스텝으로 물들입니다."
+      food: "정교하고 깊은 백여 가지 천연 스파이스 가루를 황금 비율로 배합한 '카레(Curry)'와 화덕 구이 '난'.",
+      greeting: "가슴 앞에 가지런히 두 손바닥을 합장하고 허리를 고상하게 굽히며 '나마스테'를 읊조립니다.",
+      costume: "바느질을 하지 않은 5~6미터 길이의 한 폭 천을 드레이프 장식으로 아름답게 입는 '사리'.",
+      festival: "남녀노소 신분의 벽을 깨고 알록달록한 색 가루를 서로에게 던지며 환호하는 봄 축제 '홀리(Holi)'."
     },
     quiz: [
       {
-        id: "br-q1",
-        question: "브라질의 기후와 역사적 영양 보충 배경에서 시작되었으며, 콩과 고기를 무쇠 냄비에 끓여낸 음식의 이름은 무엇일까요?",
-        options: ["타코", "빠에야", "페이조아다", "파스타"],
-        correctIndex: 2,
-        hint: "💡 힌트: 포르투갈어로 '검은콩'을 뜻하는 단어에서 파생되어 영양 가득한 고기와 콩을 함께 고아 낸 브라질의 국민 요리입니다."
+        id: "in-q1",
+        question: "인도에서 두 손을 모으고 깊이 상대의 영적 안식을 존중하며 주고받는 인사는?",
+        options: ["나마스테(Namaste)", "도스 베소스", "시앙시앙", "그데이"],
+        correctIndex: 0,
+        hint: "💡 힌트: 내 내면의 숭고함이 당신을 경배합니다라는 깊은 의미가 녹아있는 합장 인사입니다."
       },
       {
-        id: "br-q2",
-        question: "매년 사순절을 앞두고 리우데자네이루 등지에서 화려한 의상을 보며 세계인이 몰려드는 최대 축제는 무엇일까요?",
-        options: ["토마토 축제", "원주민 부족 축제", "리오 카니발(Rio Carnival)", "나일강 감사제"],
-        correctIndex: 2,
-        hint: "💡 힌트: 남미의 정열적인 삼바 리듬이 지배하는 초대형 지구촌 축제로 브라질 리우데자네이루 항구 명소에서 가장 뜨겁게 열려요."
+        id: "in-q2",
+        question: "봄을 맞아 인도 전역에서 색 가루를 던지며 서로의 화합을 다지는 대표 축제는?",
+        options: ["추석", "홀리 축제(Holi)", "리우 삼바 축제", "와파 엘 닐"],
+        correctIndex: 1,
+        hint: "💡 힌트: 물총과 총천연색 가루를 투척하며 봄의 시작을 다 함께 축하합니다."
       }
     ]
   },
+  {
+    code: "JP",
+    name: "일본 (Japan)",
+    continent: "아시아 (Asia)",
+    flag: "🇯🇵",
+    description: "전통 다도와 신사, 아기자기한 디자인과 정갈한 요리 문화가 가득한 화합의 섬나라입니다.",
+    highlights: {
+      food: "신선한 해산물과 정갈하게 간을 한 밥이 조화를 이루는 '초밥(스시)'과 따뜻한 '라멘'.",
+      greeting: "상대방의 정성에 답하며 정중하게 허리를 숙여 '오하요 고자이마스' 또는 '콘니치와'로 인사합니다.",
+      costume: "화려한 문양의 비단이나 유카타를 몸에 두르고 정성스럽게 묶는 전통 의상 '기모노'.",
+      festival: "여름철 지역 신사 주변에서 화려한 유카타를 입고 야시장을 즐기는 '마츠리(축제)'."
+    },
+    quiz: [
+      {
+        id: "jp-q1",
+        question: "일본의 전통 의상으로 직선 형태의 옷감에 오비(띠)를 매어 입는 고유 복식은 무엇일까요?",
+        options: ["기모노(Kimono)", "한복", "아오자이", "치파오"],
+        correctIndex: 0,
+        hint: "💡 힌트: '입는 것'이라는 뜻을 가지며 축제나 공식 행사 때 즐겨 입습니다."
+      },
+      {
+        id: "jp-q2",
+        question: "일본 신사나 마을에서 여름철에 열리는 다양한 등불과 포장마차가 어우러진 전통 축제는?",
+        options: ["마츠리(Matsuri)", "홀리", "카니발", "옥토버페스트"],
+        correctIndex: 0,
+        hint: "💡 힌트: 지역별로 전통 가마(미코시)를 메고 거리를 순행하는 일본 축제입니다."
+      }
+    ]
+  },
+  {
+    code: "VN",
+    name: "베트남 (Vietnam)",
+    continent: "아시아 (Asia)",
+    flag: "🇻🇳",
+    description: "비옥한 메콩강 평야와 깊은 향신 채소, 고유의 열대 풍미와 고전적인 미를 간직한 동남아 문화국입니다.",
+    highlights: {
+      food: "소고기나 닭고기를 깊게 우려낸 육수에 라이스 누들과 고수를 얹어 먹는 '쌀국수(퍼, Pho)'와 샌드위치 '반미'.",
+      greeting: "두 손을 모아 가볍게 고개를 숙이며 '신짜오(Xin chào)'라고 정답게 첫인사를 건넵니다.",
+      costume: "바지와 길게 갈라진 상의 튜닉이 조화를 이루는 고아한 전통 의상 '아오자이(Áo dài)'와 짚모자 '논라'.",
+      festival: "음력 설날을 맞아 집안을 금귤나무와 벚꽃으로 장식하고 전통 찹쌀떡 바인쯩을 나누는 최고 명절 '뗏(Tết)'."
+    },
+    quiz: [
+      {
+        id: "vn-q1",
+        question: "베트남어로 '긴 옷'을 의미하며, 길게 갈라진 상의에 바지를 받쳐 입는 아름다운 전통 의복은?",
+        options: ["아오자이(Áo dài)", "한복", "사리", "유카타"],
+        correctIndex: 0,
+        hint: "💡 힌트: 베트남 여성들이 여학교나 전통 행사 때 단아하게 입는 고유 의상입니다."
+      },
+      {
+        id: "vn-q2",
+        question: "베트남의 대표적인 전통 면 요리로, 맑고 깊은 육수에 쌀로 만든 국수와 향신 채소를 넣는 음식은?",
+        options: ["쌀국수(퍼, Pho)", "파스타", "코샤리", "라멘"],
+        correctIndex: 0,
+        hint: "💡 힌트: 베트남 전역에서 아침 식사나 별미로 가장 널리 사랑받는 국민 쌀면 요리입니다."
+      }
+    ]
+  },
+
+  // --- 2. 유럽 (Europe) - 4개국 ---
   {
     code: "ES",
     name: "스페인 (Spain)",
@@ -93,112 +155,584 @@ const SEEDED_COUNTRIES: CountryInfo[] = [
     flag: "🇪🇸",
     description: "지중해의 푸른 바다와 다채로운 예술가(가우디, 피카소)의 발자취가 숨 쉬는 투우와 시에스타의 강국입니다.",
     highlights: {
-      food: "바다의 산삼과도 같은 해산물과 상큼한 레몬즙, 값비싼 향신료 사프란을 넓고 얕은 철판에 고슬고슬 볶은 황금비율의 쌀 요리 '빠에야'.",
-      greeting: "양쪽 뺨에 번갈아 서정적인 쪽 소리를 내어 친화력을 전하는 전통 인사법 '도스 베소스(Dos besos)'를 행합니다.",
+      food: "바다의 산삼 해산물과 상큼한 레몬즙, 사프란을 넓은 철판에 고슬하게 볶아낸 황금비율 요리 '빠에야'.",
+      greeting: "양쪽 뺨에 번갈아 서정적인 소리를 내어 친화력을 전하는 전통 인사법 '도스 베소스(Dos besos)'를 행합니다.",
       costume: "화려한 붉은 레이스와 주름 장식이 파도쳐 몸짓의 미려함을 살리는 '플라멩코 댄스 의복'.",
-      festival: "매년 8월 마지막 주 부뇰 마을 전체가 온 힘을 다해 붉은 토마토를 서로에게 문지르며 동심으로 돌아가는 '토마토 축제(La Tomatina)'가 열립니다."
+      festival: "매년 8월 부뇰 마을 전체가 온 힘을 다해 붉은 토마토를 던지는 '토마토 축제(La Tomatina)'."
     },
     quiz: [
       {
         id: "es-q1",
-        question: "지중해 햇살과 사프란의 특유 노란 향내가 배어나는 바다 해물 쌀 요리로 스페인 대표 부스 요리는?",
-        options: ["빠에야(Paella)", "코샤리(Koshary)", "스파게티", "미트파이"],
+        question: "지중해 해산물과 사프란 특유의 노란 향내가 배어나는 스페인 철판 쌀 요리는?",
+        options: ["빠에야(Paella)", "코샤리", "스파게티", "미트파이"],
         correctIndex: 0,
-        hint: "💡 힌트: '넓적한 상반 철판 팬'을 의미하는 단어에서 시라되어, 신선한 홍합과 새우, 노란 천연 향신료를 고슬하게 볶는 철판 요리입니다."
+        hint: "💡 힌트: 넓적한 전용 철판 팬에서 고슬하게 익히는 스페인 대표 해산물 밥 요리입니다."
       },
       {
         id: "es-q2",
-        question: "스페인 부뇰에서 매년 8월, 과잉 농산물의 나눔과 공동체 협동을 상징적으로 폭발시키는 거대 농산물 놀이 축제는?",
+        question: "스페인 부뇰 마을에서 매년 8월 열리는 대규모 토마토 던지기 놀이 축제는?",
         options: ["옥토버페스트", "홀리 축제", "등불 축제", "토마토 축제(La Tomatina)"],
         correctIndex: 3,
-        hint: "💡 힌트: 붉고 상큼하며 지중해를 붉게 물들이는 수분이 가득한 여름 열매이자 리코펜이 풍부한 채소를 마구 던지는 장난 축제입니다."
+        hint: "💡 힌트: 온 동네가 상큼하고 붉은 토마토 수분으로 물드는 유쾌한 여름 카니발입니다."
       }
     ]
   },
+  {
+    code: "FR",
+    name: "프랑스 (France)",
+    continent: "유럽 (Europe)",
+    flag: "🇫🇷",
+    description: "에펠탑과 루브르 박물관, 미식과 예술, 자부심 높은 문화유산을 간직한 유럽의 중심 국가입니다.",
+    highlights: {
+      food: "겉은 바삭하고 속은 부드러운 초승달 모양의 빵 '크루아상'과 바게트, 다채로운 정통 치즈.",
+      greeting: "양쪽 뺨에 가볍게 소리를 내며 인사를 건네는 친근한 문화 '비쥬(Bisous)'를 나눕니다.",
+      costume: "예술가들과 해군 복식에서 유래되어 흑백 줄무늬가 세련된 '스트라이프 마린 셔츠'와 '베레모'.",
+      festival: "프랑스 혁명을 기념하여 파리 샹젤리제 거리에서 장엄하게 펼쳐지는 '혁명 기념일(Bastille Day) 퍼레이드'."
+    },
+    quiz: [
+      {
+        id: "fr-q1",
+        question: "프랑스의 대표적인 정통 제과 빵으로 '초승달'이라는 뜻을 가진 바삭한 빵의 이름은?",
+        options: ["바게트", "크루아상(Croissant)", "베이글", "식빵"],
+        correctIndex: 1,
+        hint: "💡 힌트: 버터 풍미가 겹겹이 살아있는 밤하늘의 초승달 모양 빵입니다."
+      },
+      {
+        id: "fr-q2",
+        question: "프랑스에서 친한 사이에서 양 볼에 가볍게 뽀뽀 소리를 내며 반갑게 나누는 인사법은?",
+        options: ["비쥬(Bisous)", "나마스테", "도스 베소스", "와이"],
+        correctIndex: 0,
+        hint: "💡 힌트: 불어로 가벼운 입맞춤과 안부를 뜻하는 정겨운 볼 인사입니다."
+      }
+    ]
+  },
+  {
+    code: "GB",
+    name: "영국 (United Kingdom)",
+    continent: "유럽 (Europe)",
+    flag: "🇬🇧",
+    description: "빅벤과 버킹엄 궁전, 셰익스피어와 신사 숙녀의 예절 문화, 전통 차 문화가 살아있는 섬나라입니다.",
+    highlights: {
+      food: "바삭하게 튀겨낸 흰 살 생선과 고소한 감자튀김에 식초와 소금을 뿌려 먹는 대표 국민 음식 '피시 앤 칩스(Fish and Chips)'.",
+      greeting: "정중하게 눈을 맞추며 '헬로(Hello)' 또는 '하우 두 유 두(How do you do)'라고 고상한 억양으로 인사합니다.",
+      costume: "영국 스코틀랜드 전통 고유 복식으로 격자무늬 스커트 형태의 멋스러운 의복 '킬트(Kilt)'.",
+      festival: "런던 노팅힐 거리에서 칼립소 음악과 화려한 의상 행진이 사흘간 펼쳐지는 '노팅힐 카니발(Notting Hill Carnival)'."
+    },
+    quiz: [
+      {
+        id: "gb-q1",
+        question: "영국의 대표 국민 음식으로 바삭한 생선 튀김과 감자 칩을 함께 즐기는 요리의 명칭은?",
+        options: ["피시 앤 칩스(Fish & Chips)", "타코", "빠에야", "코샤리"],
+        correctIndex: 0,
+        hint: "💡 힌트: 영국 어디서나 따뜻한 종이 봉투에 싸서 즐기는 생선과 감자 튀김 조합입니다."
+      },
+      {
+        id: "gb-q2",
+        question: "영국 스코틀랜드 남성들이 전통 행사나 축가 때 착용하는 체크무늬 치마 모양 복식은?",
+        options: ["킬트(Kilt)", "아오자이", "한복", "갈라베야"],
+        correctIndex: 0,
+        hint: "💡 힌트: 백파이프 연주자들이 멋지게 차려입는 스스코틀랜드 고유 스커트입니다."
+      }
+    ]
+  },
+  {
+    code: "IT",
+    name: "이탈리아 (Italy)",
+    continent: "유럽 (Europe)",
+    flag: "🇮🇹",
+    description: "고대 로마 콜로세움과 르네상스 예술, 미식 파스타와 피자의 고향이자 열정의 장인 국가입니다.",
+    highlights: {
+      food: "화덕에서 장작불로 구워낸 '마르게리타 피자'와 알덴테 면발에 토마토·바질 소스를 얹은 정통 '파스타'.",
+      greeting: "만나거나 헤어질 때 활기차게 '차오(Ciao!)' 또는 정중한 '본조르노(Buongiorno)'를 외칩니다.",
+      costume: "베네치아 가면 무도회에서 시작된 화려한 비단 드레스와 신비로운 수제 '베네치아 화려 가면'.",
+      festival: "아름다운 물의 도시 베네치아 운하를 가득 채우는 환상적인 수제 가면 축제 '베네치아 카니발(Carnevale di Venezia)'."
+    },
+    quiz: [
+      {
+        id: "it-q1",
+        question: "이탈리아 베네치아에서 아름다운 수제 가면을 쓰고 운하를 누비는 세계적인 세계 축제는?",
+        options: ["베네치아 카니발", "토마토 축제", "홀리 축제", "시드니 불꽃축제"],
+        correctIndex: 0,
+        hint: "💡 힌트: 화려한 신분 감춤 가면과 고전적 드레스가 물의 도시 운하를 수놓습니다."
+      },
+      {
+        id: "it-q2",
+        question: "이탈리아에서 친한 친구 사이에 반갑게 만날 때나 헤어질 때 공통으로 사용하는 유쾌한 인사는?",
+        options: ["차오(Ciao)", "나마스테", "신짜오", "그데이"],
+        correctIndex: 0,
+        hint: "💡 힌트: 안녕! 잘 가! 모두로 쓰이는 친근한 이탈리아식 인사 한마디입니다."
+      }
+    ]
+  },
+
+  // --- 3. 아프리카 (Africa) - 4개국 ---
   {
     code: "EG",
     name: "이집트 (Egypt)",
     continent: "아프리카 (Africa)",
     flag: "🇪🇬",
-    description: "인류 4대 문명의 요람이자 장엄한 피라미드와 스핑크스, 은빛 나일강의 불멸 역사가 기적처럼 빛나는 신비로운 대지입니다.",
+    description: "인류 4대 문명의 요람이자 장엄한 피라미드와 스핑크스, 은빛 나일강의 불멸 역사가 기적처럼 빛나는 대지입니다.",
     highlights: {
-      food: "아침 식사용 국민 별미인 탄수화물 폭탄 '코샤리'. 삶은 마카로니, 쌀밥, 병아리콩, 매콤새콤한 토마토소스와 양파 튀김을 격하게 섞어 먹는 서민 음식입니다.",
-      greeting: "오른손을 자신의 가슴에 얹고 공손하게 상대방을 응시하며 '안녕하세요(앗살라무 알라이쿰)'라고 속삭입니다.",
-      costume: "강렬한 자외선과 뜨겁고 모래 섞인 사막풍을 건강하게 극복하기 위해 천연 면 소재로 온몸을 헐렁하게 덮는 통원피스식 의상 '갈라베야'를 입습니다.",
-      festival: "나일강의 비옥한 홍수 범람이 비문명 지대를 농경 축복의 은혜로 이끈 것에 감사하는 오랜 유서 고유제 '와파 엘 닐(Wafaa El-Nil)'이 계속됩니다."
+      food: "탄수화물 영양 폭탄 '코샤리'. 삶은 마카로니, 쌀밥, 병아리콩, 매콤새콤한 토마토소스와 양파 튀김의 조화.",
+      greeting: "오른손을 가슴에 얹고 공손하게 '앗살라무 알라이쿰(평화가 당신에게)'이라고 속삭입니다.",
+      costume: "강렬한 사막 자외선과 모래바람을 막기 위해 통풍이 잘되는 헐렁한 원피스 '갈라베야'.",
+      festival: "나일강의 비옥한 홍수 범람이 비문명 지대를 농경 축복의 은혜로 이끈 것에 감사하는 오랜 유서 고유제 '와파 엘 닐'."
     },
     quiz: [
       {
         id: "eg-q1",
-        question: "이집트의 건조한 강풍과 극심한 일사를 유익하게 방어하고 신체의 통풍을 기막히게 도와주는 전통 원피스 의복은?",
+        question: "이집트의 건조한 강풍과 극심한 일사를 방어하고 통풍을 돕는 통원피스 전통 의복은?",
         options: ["사리", "갈라베야(Galabeya)", "블루스", "한복"],
         correctIndex: 1,
-        hint: "💡 힌트: 사막의 따가운 자외선과 차가운 밤 환경을 보강하기 위해 긴 총장과 헐렁한 실루엣을 자랑하는 한 벌 통원피스풍 직물이랍니다."
+        hint: "💡 힌트: 긴 총장과 헐렁한 실루엣을 자랑하는 아랍-북아프리카 통원피스 직물입니다."
       },
       {
         id: "eg-q2",
-        question: "이집트 대표 음식으로 마카로니, 쌀, 튀긴 마늘과 양파, 그리고 알싸한 붉은 소스를 대형 보울에 비벼 한 끼 식사가 되는 대중 음식은 무엇일까요?",
+        question: "이집트 국민 음식으로 마카로니, 쌀, 튀긴 양파, 붉은 토마토 소스를 섞어 먹는 요리는?",
         options: ["코샤리(Koshary)", "김밥", "카레라이스", "타코"],
         correctIndex: 0,
-        hint: "💡 힌트: 마카로니와 렌틸콩, 프라이드 어니언 등을 상큼 매콤 토마토 양념에 비벼 푸짐하게 포만감을 전하는 든든한 서민식입니다."
+        hint: "💡 힌트: 마카로니와 렌틸콩, 프라이드 어니언을 상큼 매콤 양념에 비벼 먹는 서민 음식입니다."
       }
     ]
   },
   {
-    code: "IN",
-    name: "인도 (India)",
-    continent: "아시아 (Asia)",
-    flag: "🇮🇳",
-    description: "수많은 종교와 사상, 유서 깊은 타지마할, 다채로운 자연 속에서 조화로운 정신문화를 꽃피운 세계 인구 대국입니다.",
+    code: "KE",
+    name: "케냐 (Kenya)",
+    continent: "아프리카 (Africa)",
+    flag: "🇰🇪",
+    description: "광활한 사파리 초원 마사이마라, 야생동물의 대이동과 동아프리카 스와힐리어 문화의 중심국입니다.",
     highlights: {
-      food: "정교하고 깊은 백여 가지 천연 스파이스 가루를 황금 비율로 마법 배합해 화기 속에 가둔 '정통 카레(Curry)'와 화덕에 얇게 구워낸 고소한 탄수화물 막바지 '난'.",
-      greeting: "가슴 앞에 가지런히 두 손바닥을 합장하고 허리를 고상하게 굽히며, 영적인 평화의 축복을 바라는 약속인 '나마스테'를 읊조립니다.",
-      costume: "바느질을 하지 않은 5~6미터 길이의 한 폭 천을 자연스러운 드레이프 장식과 고혹적인 주름으로 멋지게 연출해 내는 여성복 '사리'를 입습니다.",
-      festival: "겨울의 퇴장과 따사로운 생명 봄의 개막을 다같이 끌어안으며, 남녀노소 신분의 벽을 깨고 대색 가루를 투척하며 연대하는 색의 전쟁 '홀리(Holi)'입니다."
+      food: "옥수수가루를 뜨거운 물에 반죽하여 고기나 야채 볶음과 곁들여 손으로 떼어 먹는 국민 주식 '우갈리(Ugali)'.",
+      greeting: "스와힐리어로 '문제 없다, 다 잘 될 것이다'라는 긍정의 안부 인사인 '하쿠나 마타타(Hakuna Matata)' 및 '잠보(Jambo)'.",
+      costume: "마사이 부족이 입는 붉은색 격자무늬의 강렬하고 눈에 잘 띄는 전통 천 '슈카(Shuka)'.",
+      festival: "동아프리카 문화예술가들과 부족 음악가들이 모여 노래와 춤을 나누는 '라마 문화 축제(Lamu Cultural Festival)'."
     },
     quiz: [
       {
-        id: "in-q1",
-        question: "인도에서 두 손을 모으고 깊이 상대의 영적 안식을 존중하며 주고받는 따뜻한 문명 예인(禮人)의 단 한마디는?",
-        options: ["나마스테(Namaste)", "도스 베소스", "시앙시앙", "그데이"],
+        id: "ke-q1",
+        question: "케냐를 비롯한 동아프리카에서 '아무 걱정 없이 다 잘될 거야'라는 뜻으로 나누는 따뜻한 스와힐리어 인사는?",
+        options: ["하쿠나 마타타(Hakuna Matata)", "비쥬", "차오", "나마스테"],
         correctIndex: 0,
-        hint: "💡 힌트: 요가 클래스 등에서도 명상 전후 합장하며 즐겨 선포하며, '내 내면의 숭고함이 당신의 영혼을 환히 경배합니다'라는 뜻을 안고 있습니다."
+        hint: "💡 힌트: 라이온 킹 애니메이션에서도 긍정 에너지를 전하는 대표적인 대사입니다."
       },
       {
-        id: "in-q2",
-        question: "봄을 맞아 인도 대륙 전역 of 모든 이들이 계급과 묵은 미움을 격파하고 오색 꽃가루를 장난치듯 뒤집어쓰며 노는 봄 축제는?",
-        options: ["추석", "홀리 축제(Holi)", "리우 삼바 축제", "와파 엘 닐"],
-        correctIndex: 1,
-        hint: "💡 힌트: 신분과 성별을 초월해 온 동네가 총천연색 물총과 가루 분말로 물드는 봄맞이 카니발입니다."
+        id: "ke-q2",
+        question: "케냐 마사이 전사 부족들이 야생 동물로부터 신체를 보호하고 격자를 띤 붉은색 전통 천은?",
+        options: ["슈카(Shuka)", "한복", "아오자이", "사리"],
+        correctIndex: 0,
+        hint: "💡 힌트: 초원에서 멀리서도 돋보이는 붉고 푸른 격자무늬 천 직물입니다."
       }
     ]
   },
+  {
+    code: "MA",
+    name: "모로코 (Morocco)",
+    continent: "아프리카 (Africa)",
+    flag: "🇲🇦",
+    description: "사하라 사막의 문문과 사막의 관문, 파란 도시 셰프샤우엔, 아랍과 아프리카 문화가 융합된 이색 지대입니다.",
+    highlights: {
+      food: "고깔모양의 흙도자기 냄비에 양고기와 야채, 수분을 가두어 저온으로 조리하는 정통 '타진(Tagine)'.",
+      greeting: "가슴에 손을 대고 '살람 알라이쿰(Salam Alaikum)' 인사하며 따뜻한 민트 차를 내어줍니다.",
+      costume: "모자가 달린 길고 편안한 후드 원피스 형태의 전통 의복 '젤라바(Djellaba)'.",
+      festival: "사하라 사막 기슭에서 유목민들의 낙타 경주와 아라비아 음악이 울려 퍼지는 '페스 고전 음악 축제'."
+    },
+    quiz: [
+      {
+        id: "ma-q1",
+        question: "모로코에서 고깔 모양 도자기 뚜껑을 활용해 재료 자체 수분으로 부드럽게 찌는 유명 요리는?",
+        options: ["타진(Tagine)", "타코", "피시앤칩스", "초밥"],
+        correctIndex: 0,
+        hint: "💡 힌트: 수분이 귀한 사막 지역에서 재료의 수분을 순환시켜 익히는 도자기 요리입니다."
+      },
+      {
+        id: "ma-q2",
+        question: "모로코 전통 의상으로 햇빛과 강풍을 차단하기 위해 머리에 후드가 달린 긴 로브 의복은?",
+        options: ["젤라바(Djellaba)", "킬트", "청바지", "기모노"],
+        correctIndex: 0,
+        hint: "💡 힌트: 사막 모래 바람을 피할 수 있게 긴 고깔 후드가 부착된 편안한 로브입니다."
+      }
+    ]
+  },
+  {
+    code: "ZA",
+    name: "남아프리카 공화국 (South Africa)",
+    continent: "아프리카 (Africa)",
+    flag: "🇿🇦",
+    description: "테이블마운틴과 희망봉, 무지개 나라(Rainbow Nation)라 불리는 다채로운 인종과 자연의 교차로입니다.",
+    highlights: {
+      food: "야외 그릴에서 다양한 고기를 숯불 향으로 구워 나누는 남아공 특유의 바비큐 문화 '브라이(Braai)'.",
+      greeting: "영어와 줄루어 등 11개 공용어로 안부를 묻고, 상호 존중의 어깨 악수와 미소를 건넵니다.",
+      costume: "줄루족 등 여러 부족의 다채로운 비즈 공예 장식과 원색의 화려한 직물 패턴.",
+      festival: "케이프타운에서 새해 첫날 수천 명의 무용수들이 화려한 의상으로 가두 행진을 벌이는 '케이프타운 카니발'."
+    },
+    quiz: [
+      {
+        id: "za-q1",
+        question: "남아프리카 공화국에서 친구들과 모여 야외 숯불에 고기를 구워 먹는 대표 사회적 바비큐 문화는?",
+        options: ["브라이(Braai)", "페이조아다", "코샤리", "우갈리"],
+        correctIndex: 0,
+        hint: "💡 힌트: 화합과 우정을 나누기 위해 주말에 이웃과 함께 고기를 굽는 축제 같은 식사입니다."
+      },
+      {
+        id: "za-q2",
+        question: "남아프리카 공화국이 다양한 인종과 문화를 평화롭게 아우르는 의미로 부르는 아름다운 별칭은?",
+        options: ["무지개 나라(Rainbow Nation)", "태양의 나라", "동방의 등불", "바다의 왕국"],
+        correctIndex: 0,
+        hint: "💡 힌트: 넬슨 만델라 대통령이 선포한 다문화 평화의 상징 명칭입니다."
+      }
+    ]
+  },
+
+  // --- 4. 남아메리카 (South America) - 4개국 ---
+  {
+    code: "BR",
+    name: "브라질 (Brazil)",
+    continent: "남아메리카 (South America)",
+    flag: "🇧🇷",
+    description: "아마존 야생 삼림과 열정적인 삼바 댄스, 리우 카니발을 보유한 다문화 공존의 남미 열정국입니다.",
+    highlights: {
+      food: "검은색 콩과 고기를 온종일 부드럽게 끓여 쌀밥과 곁들이는 국민 영양식 '페이조아다'.",
+      greeting: "가볍게 뺨을 가까이 맞대며 반가운 소리를 정답게 주고받습니다.",
+      costume: "화려한 타조 깃털과 크리스탈 장식으로 삼바 리듬을 뽐내는 '삼바 카니발 드레스'.",
+      festival: "지구상 최대 가두 행진으로 매년 2월 리우데자네이루를 물들이는 '리우 카니발(Rio Carnival)'."
+    },
+    quiz: [
+      {
+        id: "br-q1",
+        question: "브라질에서 검은콩과 고기를 함께 무쇠 냄비에 푹 고아낸 국민 요리의 이름은?",
+        options: ["타코", "빠에야", "페이조아다", "파스타"],
+        correctIndex: 2,
+        hint: "💡 힌트: 포르투갈어로 검은콩을 뜻하는 단어에서 파생된 남미 고유 영양식입니다."
+      },
+      {
+        id: "br-q2",
+        question: "리우데자네이루에서 남미 삼바 리듬에 맞추어 세계인이 함께하는 최대 축제는?",
+        options: ["토마토 축제", "원주민 부족 축제", "리우 카니발", "나일강 감사제"],
+        correctIndex: 2,
+        hint: "💡 힌트: 남미의 열정적인 음악과 화려한 깃털 의상이 어우러지는 대형 카니발입니다."
+      }
+    ]
+  },
+  {
+    code: "AR",
+    name: "아르헨티나 (Argentina)",
+    continent: "남아메리카 (South America)",
+    flag: "🇦🇷",
+    description: "광활한 팜파스 초원, 탱고 음악의 발상지이자 정통 고기 요리가 유명한 남미의 열정국입니다.",
+    highlights: {
+      food: "소고기를 숯불 그릴에 두툼하게 구워 은은한 불향을 살리는 정통 '아사도(Asado)'와 반달 모양 만두 '엠파나다'.",
+      greeting: "따뜻한 미소와 함께 양 볼에 가벼운 키스 인사를 전하며 '홀라(¡Hola!)'하고 안부를 묻습니다.",
+      costume: "팜파스 초원의 목동 가우초(Gaucho)들이 착용하는 챙 넓은 모자와 가죽 장화, 차카레라 복식.",
+      festival: "부에노스아이레스 거리 곳곳에서 전 세계 무용수들이 우아한 춤선을 선보이는 '세계 탱고 페스티벌'."
+    },
+    quiz: [
+      {
+        id: "ar-q1",
+        question: "아르헨티나 가우초 목동 문화에서 시작되어 숯불에 굵은소금으로 소고기를 굽는 전통 요리는?",
+        options: ["아사도(Asado)", "코샤리", "우갈리", "빠에야"],
+        correctIndex: 0,
+        hint: "💡 힌트: 팜파스 초원에서 시작된 남미 대표 정통 숯불 구이 바비큐입니다."
+      },
+      {
+        id: "ar-q2",
+        question: "아르헨티나 부에노스아이레스의 보카 지구에서 탄생한 관능적이고 우아한 열정의 춤과 음악은?",
+        options: ["탱고(Tango)", "삼바", "플라멩코", "발레"],
+        correctIndex: 0,
+        hint: "💡 힌트: 반도네온 악기 연주에 맞춰 두 무용수가 드라마틱한 호흡을 맞추는 춤입니다."
+      }
+    ]
+  },
+  {
+    code: "PE",
+    name: "페루 (Peru)",
+    continent: "남아메리카 (South America)",
+    flag: "🇵🇪",
+    description: "잉카 문명의 공중도시 마추픽추, 안데스 고원 지대의 풍요로운 역사와 신비로움을 간직한 나라입니다.",
+    highlights: {
+      food: "신선한 생선회에 상큼한 라임 즙과 안데스 고추, 자색 양파를 재워 먹는 해산물 요리 '세비체(Ceviche)'.",
+      greeting: "가슴에 손을 얹고 따뜻한 악수를 나누며 '부엔에스 디아스(Buenos días)'라고 인사합니다.",
+      costume: "안데스 고원의 추위를 막기 위해 알파카 털로 알록달록 짜낸 '폰초(Poncho)'와 귀마개 모자 '추요'.",
+      festival: "쿠스코에서 태양신 인티를 기리며 잉카 제국의 영광을 재현하는 최대 태양제 '인티 라야미(Inti Raymi)'."
+    },
+    quiz: [
+      {
+        id: "pe-q1",
+        question: "페루의 대표 요리로, 신선한 해산물에 라임 즙을 뿌려 상큼하게 익혀 먹는 냉채 요리는?",
+        options: ["세비체(Ceviche)", "타코", "아사도", "피시앤칩스"],
+        correctIndex: 0,
+        hint: "💡 힌트: 라임의 산 성분으로 생선살을 상큼하게 다듬은 페루의 국민 해산물 요리입니다."
+      },
+      {
+        id: "pe-q2",
+        question: "페루 안데스 고원 지역 주민들이 알바카 털로 만든 천 중앙에 머리를 넣고 입는 옷은?",
+        options: ["폰초(Poncho)", "한복", "아오자이", "사리"],
+        correctIndex: 0,
+        hint: "💡 힌트: 방한과 활동성이 뛰어나며 화려한 기하학 패턴이 새겨진 안데스 고유 겉옷입니다."
+      }
+    ]
+  },
+  {
+    code: "CL",
+    name: "칠레 (Chile)",
+    continent: "남아메리카 (South America)",
+    flag: "🇨🇱",
+    description: "남북으로 4,300km 길게 늘어선 대지, 안데스산맥과 이스터섬의 모아이 석상이 기다리는 나라입니다.",
+    highlights: {
+      food: "다진 고기와 옥수수, 계란을 도자기 그릇에 오븐 구이로 만들어 내는 칠레 전통 옥수수 파이 '파스텔 데 초클로'.",
+      greeting: "포옹과 함께 활기차게 '홀라(¡Hola!)'라고 첫인사를 전합니다.",
+      costume: "칠레 카우보이 우아소(Haso)들이 착용하는 자수 민속 조끼와 챙 넓은 모자.",
+      festival: "칠레 독립기념일을 기념하여 온 동네 사람들이 쿠에카(Cueca) 춤을 추고 바비큐를 즐기는 '디에시초 오초'."
+    },
+    quiz: [
+      {
+        id: "cl-q1",
+        question: "칠레의 이스터섬에 세워져 있는 고대 신비로운 대형 사람 모양의 돌 석상의 이름은?",
+        options: ["모아이 석상(Moai)", "스핑크스", "피라미드", "스톤헨지"],
+        correctIndex: 0,
+        hint: "💡 힌트: 거대한 머리와 상반신 모양을 한 이스터섬의 고대 유적입니다."
+      },
+      {
+        id: "cl-q2",
+        question: "칠레의 국민 민속 춤으로 암닭과 수탉의 구애 동작을 기품있게 형상화한 전통 춤은?",
+        options: ["쿠에카(Cueca)", "삼바", "탱고", "플라멩코"],
+        correctIndex: 0,
+        hint: "💡 힌트: 손수건을 흔들며 박자에 맞춰 발을 굴러 추는 칠레의 공식 민속 춤입니다."
+      }
+    ]
+  },
+
+  // --- 5. 북아메리카 (North America) - 4개국 ---
+  {
+    code: "US",
+    name: "미국 (United States)",
+    continent: "북아메리카 (North America)",
+    flag: "🇺🇸",
+    description: "광활한 대륙 속에 다채로운 이주 민족의 문화가 녹아있는 첨단 과학, 문화 콘텐츠, 자유의 상징국입니다.",
+    highlights: {
+      food: "야외 바비큐 그릴에서 고기를 부드럽게 구워 한 손에 들고 먹는 육즙 가득한 '수제 버거'와 '바비큐 립'.",
+      greeting: "밝은 미소로 눈을 맞추며 '하이(Hi)' 또는 '헬로(Hello)'라고 외치며 가볍게 악수나 하이파이브를 나눕니다.",
+      costume: "개척 시대 서부 광부들의 작업복에서 시작되어 실용성을 대표하는 '데님 청바지'와 '카우보이 모자'.",
+      festival: "가을철 풍요로운 수확에 감사하며 온 가족이 모여 칠면조 구이를 나누어 먹는 '추수감사절(Thanksgiving Day)'."
+    },
+    quiz: [
+      {
+        id: "us-q1",
+        question: "미국의 대표 명절 중 하나로, 가을 수확에 감사하며 칠면조 요리를 나누는 축제는?",
+        options: ["할로윈", "추수감사절(Thanksgiving)", "독립기념일", "부활절"],
+        correctIndex: 1,
+        hint: "💡 힌트: 11월 네 번째 목요일에 열리는 대표적인 수확 감사 명절입니다."
+      },
+      {
+        id: "us-q2",
+        question: "미국 서부 개척 시대 광부 작업복에서 유래하여 세계적인 대중 의상이 된 옷은?",
+        options: ["청바지(Jeans)", "한복", "기모노", "사리"],
+        correctIndex: 0,
+        hint: "💡 힌트: 튼튼한 데님 천으로 제작되어 오늘날 자유로운 대중 패션의 아이콘입니다."
+      }
+    ]
+  },
+  {
+    code: "MX",
+    name: "멕시코 (Mexico)",
+    continent: "북아메리카 (North America)",
+    flag: "🇲🇽",
+    description: "마야 및 아즈텍 고대 문명의 숨결과 강렬한 태양, 다채로운 향신료와 열정의 카리브해 국가입니다.",
+    highlights: {
+      food: "옥수수 토르티야에 구운 고기와 야채, 살사 소스를 얹어 먹는 대표 국민 음식 '타코(Taco)'.",
+      greeting: "따뜻한 미소와 함께 손을 잡거나 친근한 포옹을 나누며 안부를 묻습니다.",
+      costume: "챙이 아주 넓어 강한 태양빛을 가려주는 짚모자 '솜브레로'와 알록달록한 폰초.",
+      festival: "죽은 이들을 기억하며 메리골드 꽃과 설탕 해골로 온 동네를 꾸미는 '죽은 자들의 날(Day of the Dead)'."
+    },
+    quiz: [
+      {
+        id: "mx-q1",
+        question: "멕시코의 상징적인 대표 음식으로, 토르티야에 매콤한 소스와 재료를 싸 먹는 요리는?",
+        options: ["타코(Taco)", "빠에야", "코샤리", "초밥"],
+        correctIndex: 0,
+        hint: "💡 힌트: 라임과 살사 소스가 어우러진 멕시코 스트리트 푸드의 대명사입니다."
+      },
+      {
+        id: "mx-q2",
+        question: "강렬한 햇빛을 차단하기 위해 챙이 매우 넓게 제작된 멕시코 전통 모자의 이름은?",
+        options: ["솜브레로(Sombrero)", "베레모", "부시헷", "사모"],
+        correctIndex: 0,
+        hint: "💡 힌트: 스페인어로 그림자를 뜻하는 단어에서 유래한 챙 넓은 모자입니다."
+      }
+    ]
+  },
+  {
+    code: "CA",
+    name: "캐나다 (Canada)",
+    continent: "북아메리카 (North America)",
+    flag: "🇨🇦",
+    description: "울창한 단풍나무 숲, 나이아가라 폭포와 로키산맥, 친절함과 원주민 인디언 문화가 조화로운 나라입니다.",
+    highlights: {
+      food: "갓 튀겨낸 감자튀김 위에 치즈 커드 알갱이와 따뜻한 그레이비 소스를 듬뿍 얹어 먹는 '푸틴(Poutine)'과 메이플 시럽.",
+      greeting: "눈을 밝게 맞추며 '헬로(Hello)' 또는 '봉주르(Bonjour)'라고 안부를 건넵니다.",
+      costume: "겨울철 추위를 이겨내기 위한 전통 원주민 파카와 퀘벡 지역의 단풍 패턴 털모자.",
+      festival: "캘거리에서 카우보이 전통 경기와 퍼레이드가 펼쳐지는 세계 최대 로데오 축제 '캘거리 스탬피드'."
+    },
+    quiz: [
+      {
+        id: "ca-q1",
+        question: "캐나다의 대표 간식으로 감자튀김에 치즈 커드와 그레이비소스를 뿌려 따뜻하게 먹는 음식은?",
+        options: ["푸틴(Poutine)", "타코", "코샤리", "미트파이"],
+        correctIndex: 0,
+        hint: "💡 힌트: 퀘벡주에서 시작되어 캐나다 전역에서 사랑받는 소울 푸드입니다."
+      },
+      {
+        id: "ca-q2",
+        question: "캐나다 국기 중앙에 그려져 있으며, 캐나다의 달콤한 천연 시럽을 만들어내는 나무 잎은?",
+        options: ["단풍나무(메이플)", "소나무", "은행나무", "야자수"],
+        correctIndex: 0,
+        hint: "💡 힌트: 캐나다의 상징이며 수액을 달여 메이플 시럽을 만듭니다."
+      }
+    ]
+  },
+  {
+    code: "JM",
+    name: "자메이카 (Jamaica)",
+    continent: "북아메리카 (North America)",
+    flag: "🇯🇲",
+    description: "카리브해의 에메랄드빛 바다, 레게 음악의 거장 밥 말리와 신나는 레게 리듬의 고향입니다.",
+    highlights: {
+      food: "매콤달콤한 저크 향신료를 고기에 발라 드럼통 그릴에서 연기로 익혀내는 정통 '저크 치킨(Jerk Chicken)'.",
+      greeting: "주먹을 가볍게 맞대거나 활기차게 '야만(Yeah man!)'을 외치며 긍정 에너지를 전합니다.",
+      costume: "빨강·노랑·초록의 라스타파라이 색상이 어우러진 레게 털모자와 편안한 린넨 드레스.",
+      festival: "킹스턴 거리가 신나는 레게 리듬과 스틸 드럼 소리로 가득 차는 '자메이카 카니발'."
+    },
+    quiz: [
+      {
+        id: "jm-q1",
+        question: "자메이카에서 탄생하여 평화와 사랑의 메시지를 전하는 세계적인 음악 장르는?",
+        options: ["레게(Reggae)", "클래식", "탱고", "플라멩코"],
+        correctIndex: 0,
+        hint: "💡 힌트: 밥 말리가 대표적인 아티스트로 독특한 오프비트 리듬이 특징입니다."
+      },
+      {
+        id: "jm-q2",
+        question: "자메이카 특유의 매콤한 향신료 양념을 닭고기에 발라 숯불 드럼통에 구워내는 요리는?",
+        options: ["저크 치킨(Jerk Chicken)", "피시앤칩스", "페이조아다", "우갈리"],
+        correctIndex: 0,
+        hint: "💡 힌트: 올스파이스와 핫페퍼 양념의 풍미가 스며든 카리브해 바비큐입니다."
+      }
+    ]
+  },
+
+  // --- 6. 오세아니아 (Oceania) - 4개국 ---
   {
     code: "AU",
     name: "호주 (Australia)",
     continent: "오세아니아 (Oceania)",
     flag: "🇦🇺",
-    description: "태고의 야생 코알라 및 캥거루, 환상 가득한 시드니 오페라하우스와 드넓은 코랄 해안을 품은 대자연 친화적 문명국입니다.",
+    description: "야생 코알라 및 캥거루, 시드니 오페라하우스와 드넓은 코랄 해안을 품은 대자연 친화적 문명국입니다.",
     highlights: {
-      food: "바삭하고 짭조름한 다진 고기를 채워 오븐에서 정성껏 구워낸 호주식 구이 '미트 파이'와 비타민 효소 가득한 검고 끈적한 스프레드인 '베지마이트'.",
-      greeting: "친근하고 활기차게 '그데이, 마이트! (G'day, mate!)'를 외치며 튼튼한 무사 안녕의 우정 악수를 나눕니다.",
-      costume: "자연 자외선으로부터 영리한 두피 보호를 위해 모자 가에 아련한 코르크 마개를 주렁주렁 단 아웃백 전통 사파리 양식 '부시 헷(Bush Hat)'과 라이프가드 가디언 제복.",
-      festival: "광대한 남반구의 무더운 12월 31일 여름휴가를 맞으며 전 세계인들을 시드니 항구의 은빛 밤하늘 아래 카운트다운 불꽃 예술로 안내하는 '시드니 신년 맞이 축제(Sydney NYE)'입니다."
+      food: "바삭한 생지 안에 다진 고기를 채워 구운 '미트 파이(Meat Pie)'와 효소 스프레드 '베지마이트'.",
+      greeting: "친근하게 '그데이, 마이트! (G'day, mate!)'를 외치며 튼튼한 우정의 악수를 나눕니다.",
+      costume: "자외선 차단을 위해 모자 챙에 코르크 마개를 단 '부시 헷(Bush Hat)'.",
+      festival: "여름의 12월 31일 밤 시드니 항구 하늘을 은빛 불꽃으로 수놓는 '시드니 신년 맞이 불꽃축제'."
     },
     quiz: [
       {
         id: "au-q1",
-        question: "호주의 광활한 목축 기후와 광업 기원으로, 광부들이 고기를 가볍게 감싸 휴대하여 에너지 보충용으로 즐긴 바삭한 파이의 정체는 무엇입니까?",
+        question: "호주의 광목축 문화 기원으로, 다진 고기를 페이스트리 안에 넣어 구운 음식은?",
         options: ["미트 라이스", "코샤리", "미트 파이(Meat Pie)", "빠에야"],
         correctIndex: 2,
-        hint: "💡 힌트: 바게트나 도우가 아닌 바삭한 생지 페이스트리 시트 안에 다져 볶은 육즙 쇠고기를 알차게 채운 든든한 소형 구이 식사입니다."
+        hint: "💡 힌트: 바삭한 생지 페이스트리 안에 다진 소고기를 채워 넣은 호주식 구이입니다."
       },
       {
         id: "au-q2",
-        question: "오세아니아 호주에서 뜨거운 여름 새해를 극적이면서도 낭만 넘치는 음악과 우렁찬 축복 불꽃 쇼로 맞이하는 글로벌 스케일 축제는?",
-        options: ["추석 한가위", "시드니 신년 불꽃축제", "토마토 전쟁", "삼바 축제"],
+        question: "남반구 호주에서 뜨거운 여름 새해를 시드니 하버브리지에서 맞이하는 글로벌 축제는?",
+        options: ["추석", "시드니 신년 불꽃축제", "토마토 전쟁", "삼바 축제"],
         correctIndex: 1,
-        hint: "💡 힌트: 12월 31일의 따사로운 해변 여름밤, 시드니 랜드마크 랜드브릿지와 아름다운 백스텝 오라하우스 하늘을 환상적인 은가루로 꾸미는 랜드마크 축제입니다."
+        hint: "💡 힌트: 시드니 오페라하우스와 하버브리지 상공을 빛내는 세계적인 카운트다운 쇼입니다."
+      }
+    ]
+  },
+  {
+    code: "NZ",
+    name: "뉴질랜드 (New Zealand)",
+    continent: "오세아니아 (Oceania)",
+    flag: "🇳🇿",
+    description: "청정 빙하와 만년설, 마오리족의 고유한 하카 의식과 원시 대자연이 살아 숨 쉬는 나라입니다.",
+    highlights: {
+      food: "지열을 이용해 땅속 구덩이 돌 위에 재료를 올려 구워 먹는 마오리 전통 요리 '항기(Hāngī)'.",
+      greeting: "서로의 코를 두 번 살짝 대며 상대의 숨결을 나누는 마오리 전통 인사 '홍이(Hongi)'.",
+      costume: "마오리 부족 전사들이 입는 기하학적 패턴의 깃털 망토 '카후후루(Kahuhuru)'.",
+      festival: "전국 원주민 마오리 무용수들이 하카 춤과 노래 기량을 다투는 전통 축제 '마타리키'."
+    },
+    quiz: [
+      {
+        id: "nz-q1",
+        question: "뉴질랜드 마오리족이 서로의 코를 두 번 부드럽게 대어 생명의 숨결을 공유하는 전통 인사는?",
+        options: ["홍이(Hongi)", "비쥬", "나마스테", "신짜오"],
+        correctIndex: 0,
+        hint: "💡 힌트: 코를 맞대어 삶의 기운과 존중을 나누는 마오리족 고유의 환대 인사법입니다."
+      },
+      {
+        id: "nz-q2",
+        question: "뉴질랜드 마오리족이 뜨거운 지열과 땅속 뜨거운 돌을 활용해 음식을 익히는 전통 구이 요리는?",
+        options: ["항기(Hāngī)", "타진", "아사도", "브라이"],
+        correctIndex: 0,
+        hint: "💡 힌트: 지열 지대의 구덩이에 나뭇잎과 돌을 쌓아 천천히 쪄내는 야외 요리입니다."
+      }
+    ]
+  },
+  {
+    code: "FJ",
+    name: "피지 (Fiji)",
+    continent: "오세아니아 (Oceania)",
+    flag: "🇫🇯",
+    description: "남태평양의 에메랄드빛 산호초 섬, 여유로운 피지 타임과 환대의 미소가 반겨주는 섬나라입니다.",
+    highlights: {
+      food: "카바 뿌리를 빻아 정성껏 우려내어 손님 환영 의식 때 우려 마시는 전통 음료 '카바(Kava)'.",
+      greeting: "밝은 환호성과 함께 손을 흔들며 따뜻하게 '불라(Bula!)'라고 인사를 외칩니다.",
+      costume: "남녀 모두 입는 남태평양 피지의 랩스커트 의복 '술루(Sulu)'와 화려한 꽃목걸이.",
+      festival: "수도 피지 수바에서 화려한 퍼레이드와 미소 콘테스트가 펼쳐지는 '히비스커스 축제'."
+    },
+    quiz: [
+      {
+        id: "fj-q1",
+        question: "피지에 방문한 손님을 환영하며 '환영합니다, 건강하세요!'의 뜻으로 건네는 활기찬 인사는?",
+        options: ["불라(Bula!)", "차오", "하쿠나 마타타", "그데이"],
+        correctIndex: 0,
+        hint: "💡 힌트: 피지 공항이나 호텔에 내리면 모두가 활짝 웃으며 외쳐주는 인사입니다."
+      },
+      {
+        id: "fj-q2",
+        question: "피지인들이 정식 행사나 일상에서 즐겨 입는 스커트 모양의 전통 하의 의복은?",
+        options: ["술루(Sulu)", "청바지", "킬트", "한복"],
+        correctIndex: 0,
+        hint: "💡 힌트: 피지에서는 남성 경찰이나 신사들도 기품있게 착용하는 전통 랩스커트입니다."
+      }
+    ]
+  },
+  {
+    code: "PG",
+    name: "파푸아뉴기니 (Papua New Guinea)",
+    continent: "오세아니아 (Oceania)",
+    flag: "🇵🇬",
+    description: "800여 부족 언어가 공존하는 원시림의 섬, 화려한 조류 깃털과 싱싱한 부족 무용 축제의 대지입니다.",
+    highlights: {
+      food: "야자나무 줄기 녹말에서 추출한 '사고(Sago)' 떡과 구운 바나나 및 열대 과일.",
+      greeting: "부족 원로와 손을 굳건히 마주잡고 '아핀운(Apinun)' 하고 인사를 전합니다.",
+      costume: "극락조 깃털과 조개껍데기, 부족 고유 페인팅으로 온몸을 장식하는 전통 부족 의상.",
+      festival: "수십 개 수렵 부족이 한자리에 모여 고유 의상과 춤을 선보이는 '고로카 쇼(Goroka Show)'."
+    },
+    quiz: [
+      {
+        id: "pg-q1",
+        question: "파푸아뉴기니에서 수십 개 부족이 화려한 극락조 깃털을 쓰고 모여 춤을 다투는 축제는?",
+        options: ["고로카 쇼(Goroka Show)", "리우 카니발", "토마토 축제", "홀리 축제"],
+        correctIndex: 0,
+        hint: "💡 힌트: 파푸아뉴기니 고산지대 고로카 마을에서 열리는 대표 민족 싱싱(Sing-sing) 축제입니다."
+      },
+      {
+        id: "pg-q2",
+        question: "파푸아뉴기니 야자나무 줄기 속 녹말을 추출해 쪄내는 고소한 전통 주식의 이름은?",
+        options: ["사고(Sago)", "우갈리", "코샤리", "푸틴"],
+        correctIndex: 0,
+        hint: "💡 힌트: 열대 열매 및 바나나와 함께 곁들여 먹는 파푸아뉴기니 전통 녹말 주식입니다."
       }
     ]
   }
@@ -238,6 +772,64 @@ export default function App() {
   const [selectedCountry, setSelectedCountry] = useState<CountryInfo>(SEEDED_COUNTRIES[0]);
   const [generatingCountryName, setGeneratingCountryName] = useState<string>("");
   const [isGeneratingCountry, setIsGeneratingCountry] = useState<boolean>(false);
+
+  // Class-level Assigned Continents State
+  const [classContinents, setClassContinents] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem("class_continent_map");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      "6-1": "아시아 (Asia)",
+      "6-2": "유럽 (Europe)",
+      "6-3": "아프리카 (Africa)",
+      "6-4": "남아메리카 (South America)",
+      "6-5": "북아메리카 (North America)",
+      "6-6": "오세아니아 (Oceania)"
+    };
+  });
+
+  const [selectedContinentFilter, setSelectedContinentFilter] = useState<string>("전체");
+
+  // Fetch class assigned continents from backend
+  const fetchClassContinents = async () => {
+    try {
+      const res = await fetch("/api/class-continent/list");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.custom && Object.keys(data.custom).length > 0) {
+          setClassContinents(prev => ({ ...prev, ...data.custom }));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch class continents:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchClassContinents();
+  }, []);
+
+  // Sync selectedContinentFilter whenever classCode or classContinents changes
+  useEffect(() => {
+    const assigned = classContinents[classCode] || "전체";
+    setSelectedContinentFilter(assigned);
+  }, [classCode, classContinents]);
+
+  const handleSaveClassContinent = async (targetClass: string, newContinent: string) => {
+    const updated = { ...classContinents, [targetClass]: newContinent };
+    setClassContinents(updated);
+    try {
+      localStorage.setItem("class_continent_map", JSON.stringify(updated));
+      await fetch("/api/class-continent/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classCode: targetClass, continent: newContinent })
+      });
+    } catch (e) {
+      console.error("Failed to save class continent:", e);
+    }
+  };
   
   // Custom API key & Teacher Aggregation States
   const [userApiKey, setUserApiKey] = useState<string>(() => localStorage.getItem("user_gemini_api_key") || "");
@@ -368,25 +960,59 @@ export default function App() {
   
   const [groupName, setGroupName] = useState<string>("글로벌 지킴이 1모둠");
   const [teacherFilterClass, setTeacherFilterClass] = useState<string>(""); // "" means show all, or filtered classroom code e.g., "6-1"
-  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
+  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([
+    { name: "김민재", role: "기획/연출" },
+    { name: "이하은", role: "대본/리포터" },
+    { name: "박준우", role: "자료조사" },
+    { name: "최수아", role: "촬영담당" }
+  ]);
   const [newMemberName, setNewMemberName] = useState<string>("");
   const [newMemberRole, setNewMemberRole] = useState<string>("");
 
-  // Tab 1 States: Storyboard Planner
+  // Tab 1 States: Storyboard Planner (1-Min Short-form Video Focus)
   const [storyboard, setStoryboard] = useState<StoryboardScene[]>([]);
   const [editSceneIndex, setEditSceneIndex] = useState<number | null>(null);
   const [sceneInput, setSceneInput] = useState<Partial<StoryboardScene>>({
     category: "음식",
     screenVisual: "",
     audioText: "",
-    notes: ""
+    notes: "",
+    durationSec: 15
   });
   
   // AI Evaluations API
   const [scriptFeedback, setScriptFeedback] = useState<any | null>(null);
   const [evaluatingScript, setEvaluatingScript] = useState<boolean>(false);
 
-  // Tab 2 States: Stamp Passport & Quizzes
+  // Tab 2 States: Stamp Passport, Quizzes & Offline Booth Planner
+  const [expoSubTab, setExpoSubTab] = useState<"physical" | "digital">("physical");
+  const [showBoothPosterModal, setShowBoothPosterModal] = useState<boolean>(false);
+  const [boothPlan, setBoothPlan] = useState<OfflineBoothPlan>({
+    boothName: "글로벌 문화 탐험 체험 부스",
+    boothLocation: "6학년 각 교실 중앙 부스 A",
+    operatingTime: "박람회 2~3교시 (10:00 ~ 11:30)",
+    missions: {
+      greeting: "현지 고유 인사말 함께 외치기 & 뜻 알아맞히기",
+      cultureExp: "전통 의상 소품 입어보고 기념 포토존 촬영하기",
+      quizTaste: "대표 음식/향신료 시향 및 이색 문화 퀴즈 풀기",
+      videoWatch: "1분 숏폼 홍보 영상 관람하고 여권 도장 획득하기"
+    },
+    memberRoles: [
+      { name: "김민재", role: "기획/연출", boothTask: "부스 총괄 안내 & 방문객 환영" },
+      { name: "이하은", role: "대본/리포터", boothTask: "1분 홍보 영상 태블릿 상영 및 설명" },
+      { name: "박준우", role: "자료조사", boothTask: "전통 인사법 시연 & 미션 성공 판정" },
+      { name: "최수아", role: "촬영담당", boothTask: "의상 소품 착용 도우미 & 포토존 촬영" }
+    ],
+    checklist: [
+      { item: "부스 안내 미니 간판 및 홍보 포스터", checked: true, owner: "김민재" },
+      { item: "1분 홍보 영상 상영용 태블릿 / 노트북", checked: true, owner: "이하은" },
+      { item: "전통 의상 소품 및 장신구 모형", checked: false, owner: "최수아" },
+      { item: "대표 음식/향신료 시향 재료 및 판넬", checked: false, owner: "박준우" },
+      { item: "세계시민 여권 스탬프(도장) 및 퀴즈함", checked: true, owner: "김민재" },
+      { item: "방문객 기념 스티커 및 칭찬 스탬프판", checked: false, owner: "모둠 공통" }
+    ]
+  });
+
   const [userPassportStamps, setUserPassportStamps] = useState<string[]>(["KR"]); // Start with Korea unlocked
   const [currentQuizCountry, setCurrentQuizCountry] = useState<CountryInfo | null>(null);
   const [quizQuestionIndex, setQuizQuestionIndex] = useState<number>(0);
@@ -543,18 +1169,43 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Filter countries on quick search bar
-  const filteredCountries = countries.filter(country => 
-    country.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    country.continent.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter countries by continent assignment/selection AND search term
+  const filteredCountries = countries.filter(country => {
+    const continentTerm = selectedContinentFilter.split(" ")[0].toLowerCase();
+    const matchesContinent = 
+      selectedContinentFilter === "전체" || 
+      selectedContinentFilter === "전체 (모든 대륙)" ||
+      country.continent.toLowerCase().includes(continentTerm);
 
-  // Add group member
+    const matchesSearch = 
+      !searchTerm.trim() ||
+      country.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      country.continent.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      country.description.toLowerCase().includes(searchTerm.toLowerCase());
+
+    return matchesContinent && matchesSearch;
+  });
+
+  // Keep selectedCountry inside filteredCountries if available
+  useEffect(() => {
+    if (filteredCountries.length > 0) {
+      const isStillValid = filteredCountries.some(c => c.code === selectedCountry.code);
+      if (!isStillValid) {
+        setSelectedCountry(filteredCountries[0]);
+      }
+    }
+  }, [selectedContinentFilter, classCode, countries]);
+
+  // Add group member (Max 6)
   const handleAddMember = () => {
     if (!newMemberName.trim()) return;
+    if (groupMembers.length >= 6) {
+      alert("모둠당 인원은 최대 6명까지 등록 및 참여가 가능합니다.");
+      return;
+    }
     setGroupMembers([...groupMembers, {
-      name: newMemberName,
-      role: newMemberRole || "콘텐츠 모니터링"
+      name: newMemberName.trim(),
+      role: newMemberRole.trim() || "콘텐츠 모니터링"
     }]);
     setNewMemberName("");
     setNewMemberRole("");
@@ -622,7 +1273,7 @@ export default function App() {
     setStoryboard(updated);
   };
 
-  // Fill in complete storyboard sample for rapid testing
+  // Fill in 1-Minute (60s) Short-form Video Storyboard Sample
   const handleAutofillExample = () => {
     const name = selectedCountry.name;
     const food = selectedCountry.highlights.food;
@@ -635,25 +1286,37 @@ export default function App() {
         id: "ex-1",
         sceneNumber: 1,
         category: "언어/인사",
-        screenVisual: `모둠장 ${groupMembers[0]?.name || "학생"}이 전면 카메라를 응시하며 고유의 예제 방식인 [${greeting}]을 따뜻한 미소와 모션 그래픽 자막으로 재현하며 첫인사를 멋지게 건넨다.`,
-        audioText: `나레이션: 안녕하세요! 우리 모둠이 소개할 자랑스러운 문명은 바로 [${name}] 입니다! 인사법에는 기후를 극복한 조상들의 향기가 짙게 묻어있어요.`,
-        notes: "인사 도중 손의 움직임은 천천히 우아하게 시연하고 슬라이드 트랜지션 처리 예정."
+        screenVisual: `모둠원 전체가 카메라 앞에 서서 [${selectedCountry.flag} ${name}]의 고유 인사말 [${greeting}]을 미소와 함께 손동작으로 재현하며 60초 홍보 영상 오프닝을 연다.`,
+        audioText: `나레이션: "안녕하세요! 우리 모둠이 소개할 열정의 문명은 [${name}] 입니다! [${greeting}] 인사로 신나는 1분 홍보 여행을 시작합니다!"`,
+        notes: "⏱️ 소요시간: 15초 (0~15s) | 인트로 & 오프닝 인사",
+        durationSec: 15
       },
       {
         id: "ex-2",
         sceneNumber: 2,
         category: "음식",
-        screenVisual: `초밀착 매크로 렌즈로 [${food}]의 대표 모형이나 사진 자료를 화면 정중앙에 고풍스럽게 띄우며, 기후 및 영토 비옥도가 조리 기법에 끼친 이유를 다이어그램 화살표로 보여준다.`,
-        audioText: "대본(이서연): 맛과 기후의 비결! 척박하거나 해안가 위주의 환경에 대처하기 위해 식재료를 오랫동안 보존하고 끓이게 되며 이토록 특색 있는 음식이 완성되었다고 합니다.",
-        notes: "배경음악은 해당 대륙풍의 신나며 통통 튀는 민속 연주 음원을 잔잔히 루프 스포일."
+        screenVisual: `대표 음식 [${food}]의 특색 있는 조리법과 재료 사진/모형을 카메라에 밀착하여 보여주며, 자연환경과 기후의 영향력을 다이어그램 자막으로 제시한다.`,
+        audioText: `대본: "[${food}]의 깊은 맛에는 척박함이나 독특한 기후를 슬기롭게 극복한 이 나라 사람들의 생활 지혜와 문화 유산이 고스란히 담겨있어요."`,
+        notes: "⏱️ 소요시간: 20초 (15~35s) | 핵심 대표 문화 특색",
+        durationSec: 20
       },
       {
         id: "ex-3",
         sceneNumber: 3,
         category: "의상/축제",
-        screenVisual: `야외 교정 쉼터 공간에서 모둠 전체가 짝을 지어 [${costume}] 소품 장신구와 함께 역사적 의의를 뽐내는 미니 연출 컷. 이후 [${festival}] 동영상 참고 자료를 짧게 분할 합성 배치한다.`,
-        audioText: `나레이션: 이들의 삶의 활력소가 되는 다이나믹 페스티벌 속으로 다같이 여행을 떠나보는 건 어떨까요? 그들의 열정적인 스피릿을 가슴으로 포용합시다!`,
-        notes: "미술 교과에 만든 모형 종이 피켓과 대고 있는 전통 탈 소품 정렬 강조."
+        screenVisual: `전통 의상 [${costume}] 소품을 착용한 모둠원이 [${festival}] 축제 사진을 배경으로 활기찬 동작을 취하며 다문화 존중 메시지 피켓을 들어올린다.`,
+        audioText: `나레이션: "화려한 [${costume}] 의상과 [${festival}] 축제처럼, 지구촌 문화의 다양성을 편견 없이 바라보는 마음이 진정한 세계 시민의 시작입니다!"`,
+        notes: "⏱️ 소요시간: 15초 (35~50s) | 축제 & 세계시민 가치",
+        durationSec: 15
+      },
+      {
+        id: "ex-4",
+        sceneNumber: 4,
+        category: "통합",
+        screenVisual: `모둠원 6명이 '우리 부스로 놀러 오세요!' 피켓을 들고 손을 흔들며 체험부스에서 준비한 인사말/의상/퀴즈 스탬프 미션을 크게 홍보하며 클로징한다.`,
+        audioText: `다같이: "신나는 미션과 스탬프 도장이 기다리는 우리 모둠 체험부스로 지금 바로 놀러 오세요! 기다릴게요~!"`,
+        notes: "⏱️ 소요시간: 10초 (50~60s) | 체험부스 초대 & 엔딩 (총 60초)",
+        durationSec: 10
       }
     ];
     setStoryboard(samples);
@@ -1176,6 +1839,25 @@ ${clausesCombined}`
                 />
               </div>
               <div>
+                <label className="text-[10px] uppercase tracking-wider font-extrabold text-indigo-600 block mb-1 flex items-center justify-between">
+                  <span>🌍 학급 담당 대륙 (모둠 할당)</span>
+                  <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1 rounded font-bold">자동 필터</span>
+                </label>
+                <select 
+                  value={classContinents[classCode] || "전체"}
+                  onChange={(e) => handleSaveClassContinent(classCode, e.target.value)}
+                  className="w-full bg-indigo-50/50 border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="전체">🌐 전체 (모든 대륙 탐구)</option>
+                  <option value="아시아 (Asia)">🌏 아시아 (Asia)</option>
+                  <option value="유럽 (Europe)">🏰 유럽 (Europe)</option>
+                  <option value="아프리카 (Africa)">🏜️ 아프리카 (Africa)</option>
+                  <option value="남아메리카 (South America)">💃 남아메리카 (South America)</option>
+                  <option value="북아메리카 (North America)">🗽 북아메리카 (North America)</option>
+                  <option value="오세아니아 (Oceania)">🦘 오세아니아 (Oceania)</option>
+                </select>
+              </div>
+              <div>
                 <label className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 block mb-1">👥 실천 탐구 모둠명</label>
                 <input 
                   type="text" 
@@ -1189,45 +1871,80 @@ ${clausesCombined}`
 
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="text-[11px] font-bold text-slate-500">참여 학생 및 역할</label>
-                <span className="text-[10px] text-slate-400">{groupMembers.length}명 참여</span>
+                <label className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
+                  <span>참여 단원 및 역할</span>
+                  <span className="text-[9px] font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-100">최대 6명</span>
+                </label>
+                <span className={`text-[10px] font-extrabold ${groupMembers.length >= 6 ? "text-amber-600" : "text-slate-500"}`}>
+                  {groupMembers.length} / 6명
+                </span>
               </div>
               
-              <ul className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                {groupMembers.map((m, idx) => (
-                  <li key={idx} className="flex justify-between items-center text-[11px] bg-white border border-slate-150 p-1.5 rounded-md shadow-xs">
-                    <span className="font-bold text-slate-700">{m.name} <span className="text-slate-400 text-[10px]">({m.role})</span></span>
-                    <button 
-                      onClick={() => handleRemoveMember(idx)} 
-                      className="text-slate-300 hover:text-rose-500 hover:scale-115 transition"
-                    >
-                      ✕
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              {groupMembers.length === 0 ? (
+                <div className="bg-slate-50 border border-dashed border-slate-200 rounded-lg p-2 text-center text-[10px] text-slate-400 my-1">
+                  아직 등록된 모둠원이 없습니다. 아래에 단원을 추가하세요 (최대 6명).
+                </div>
+              ) : (
+                <ul className="space-y-1.5 max-h-40 overflow-y-auto pr-1 my-1">
+                  {groupMembers.map((m, idx) => (
+                    <li key={idx} className="flex justify-between items-center text-[11px] bg-white border border-slate-150 p-1.5 rounded-md shadow-xs">
+                      <span className="font-bold text-slate-800">
+                        <span className="text-indigo-600 font-extrabold mr-1">#{idx+1}</span>
+                        {m.name} 
+                        <span className="text-slate-400 text-[10px] ml-1 font-normal">({m.role})</span>
+                      </span>
+                      <button 
+                        onClick={() => handleRemoveMember(idx)} 
+                        className="text-slate-300 hover:text-rose-500 hover:scale-115 transition cursor-pointer px-1"
+                        title="단원 삭제"
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
-              <div className="grid grid-cols-2 gap-1.5 mt-2.5">
+              {/* Quick Role Presets for 6-member groups */}
+              <div className="flex flex-wrap gap-1 my-1.5">
+                {["기획/연출", "대본/리포터", "자료조사", "촬영담당", "영상편집", "발표/모니터링"].map((presetRole) => (
+                  <button
+                    key={presetRole}
+                    type="button"
+                    onClick={() => setNewMemberRole(presetRole)}
+                    className="text-[9px] bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 px-1.5 py-0.5 rounded transition font-medium cursor-pointer"
+                  >
+                    +{presetRole}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 mt-1">
                 <input 
                   type="text" 
-                  placeholder="이름" 
+                  placeholder="단원 이름" 
                   value={newMemberName}
                   onChange={(e) => setNewMemberName(e.target.value)}
-                  className="bg-white border border-slate-200 rounded px-2 py-1 text-[11px]"
+                  className="bg-white border border-slate-200 rounded px-2 py-1 text-[11px] focus:ring-1 focus:ring-indigo-500 focus:outline-none font-bold"
                 />
                 <input 
                   type="text" 
-                  placeholder="역할 (예: 촬영)" 
+                  placeholder="역할 (선택/직접입력)" 
                   value={newMemberRole}
                   onChange={(e) => setNewMemberRole(e.target.value)}
-                  className="bg-white border border-slate-200 rounded px-2 py-1 text-[11px]"
+                  className="bg-white border border-slate-200 rounded px-2 py-1 text-[11px] focus:ring-1 focus:ring-indigo-500 focus:outline-none"
                 />
               </div>
               <button 
                 onClick={handleAddMember}
-                className="w-full mt-2 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold rounded-lg flex items-center justify-center gap-1 transition"
+                disabled={groupMembers.length >= 6}
+                className={`w-full mt-1.5 py-1.5 border text-[10px] font-bold rounded-lg flex items-center justify-center gap-1 transition ${
+                  groupMembers.length >= 6 
+                    ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                    : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200 cursor-pointer shadow-2xs"
+                }`}
               >
-                <Plus className="w-3 h-3 text-slate-400" /> 모둠원 추가하기
+                <Plus className="w-3 h-3" /> {groupMembers.length >= 6 ? "모둠원 6명 인원 완료" : "모둠원 추가하기 (최대 6명)"}
               </button>
             </div>
           </div>
@@ -1428,9 +2145,9 @@ ${clausesCombined}`
                         const found = countries.find(c => c.code === e.target.value);
                         if (found) setSelectedCountry(found);
                       }}
-                      className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-indigo-700 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-indigo-700 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                     >
-                      {countries.map(c => (
+                      {filteredCountries.map(c => (
                         <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
                       ))}
                     </select>
@@ -1533,6 +2250,64 @@ ${clausesCombined}`
                   </div>
                 </div>
               </div>
+
+              {/* Continent Filter & Class Assignment Banner */}
+              <div className="bg-gradient-to-r from-indigo-50/80 via-purple-50/50 to-indigo-50/80 border border-indigo-150 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3.5 shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <span className="bg-indigo-600 text-white text-[11px] font-black px-2.5 py-1 rounded-full shadow-xs">
+                    {classCode}학급
+                  </span>
+                  <div>
+                    <div className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                      <span>담당 대륙:</span>
+                      <span className="text-indigo-600 underline underline-offset-2 font-black">{classContinents[classCode] || "전체"}</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-medium">
+                      학급 배정 대륙의 샘플 국가만 정렬하여 표시 중입니다 ({filteredCountries.length}개 국가)
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+                  {[
+                    { id: "전체", label: "🌐 전체" },
+                    { id: "아시아 (Asia)", label: "🌏 아시아" },
+                    { id: "유럽 (Europe)", label: "🏰 유럽" },
+                    { id: "아프리카 (Africa)", label: "🏜️ 아프리카" },
+                    { id: "남아메리카 (South America)", label: "💃 남아메리카" },
+                    { id: "북아메리카 (North America)", label: "🗽 북아메리카" },
+                    { id: "오세아니아 (Oceania)", label: "🦘 오세아니아" }
+                  ].map(tab => {
+                    const isSelected = 
+                      selectedContinentFilter.toLowerCase().includes(tab.id.split(" ")[0].toLowerCase()) || 
+                      (tab.id === "전체" && (selectedContinentFilter === "전체" || selectedContinentFilter === "전체 (모든 대륙)"));
+                    
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setSelectedContinentFilter(tab.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition whitespace-nowrap cursor-pointer ${
+                          isSelected
+                            ? "bg-indigo-600 text-white shadow-xs scale-105"
+                            : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-indigo-600"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {filteredCountries.length === 0 && (
+                <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-8 text-center space-y-3 my-2">
+                  <div className="text-4xl">🌍</div>
+                  <h3 className="text-sm font-bold text-amber-900">선택한 대륙[{selectedContinentFilter}]에 해당하는 샘플 국가가 아직 아카이브에 없습니다</h3>
+                  <p className="text-xs text-amber-700 max-w-md mx-auto leading-relaxed">
+                    상단의 <strong className="text-indigo-700">AI 국가 추가</strong> 버튼을 활용해 원하시는 대륙의 국가를 생성하거나, 대륙 필터를 전환하여 다른 지역을 탐구해 보세요!
+                  </p>
+                </div>
+              )}
 
               {/* Responsive Cards Filter Search List */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -1739,6 +2514,30 @@ ${clausesCombined}`
                 </div>
               </div>
 
+              {/* ⏱️ 1분 숏폼 영상 안내 & 총 소요시간 */}
+              <div className="bg-gradient-to-r from-amber-50 to-indigo-50 border border-indigo-200 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-3 text-xs shadow-xs">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">⏱️</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-slate-900 text-sm">1분(60초) 숏폼 홍보 영상 구성 가이드</span>
+                      <span className="text-[10px] bg-amber-200 text-amber-900 font-black px-2 py-0.5 rounded-full">실제 체험부스 상영용</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px] mt-0.5">
+                      체험부스에 방문한 후배 및 친구들이 집중해서 감상할 수 있도록 총 60초(1분) 내외로 씬을 나누어 기획해보세요.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="bg-white border border-indigo-200 px-3.5 py-1.5 rounded-xl text-center shadow-2xs">
+                    <span className="text-slate-400 text-[10px] block font-bold">예상 총 재생 시간</span>
+                    <span className={`text-sm font-black ${storyboard.reduce((a, s) => a + (s.durationSec || 15), 0) > 75 ? 'text-rose-600' : 'text-indigo-700'}`}>
+                      {storyboard.reduce((a, s) => a + (s.durationSec || 15), 0)}초 / 60초 (1분)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {/* 🎥 모둠 완성 동영상 링크 연결 (선택) */}
               <div className="bg-gradient-to-r from-indigo-50/70 to-amber-50/70 rounded-2xl border-2 border-indigo-200 p-4.5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
                 <div className="space-y-1 text-left flex-1">
@@ -1818,6 +2617,20 @@ ${clausesCombined}`
                       onChange={(e) => setSceneInput({...sceneInput, audioText: e.target.value})}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">⏱️ 장면 소요 시간 (초 단위)</label>
+                    <select
+                      value={sceneInput.durationSec || 15}
+                      onChange={(e) => setSceneInput({...sceneInput, durationSec: Number(e.target.value)})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold"
+                    >
+                      <option value={10}>10초 (짧고 임팩트 있는 메시지)</option>
+                      <option value={15}>15초 (기본 권장 소요시간)</option>
+                      <option value={20}>20초 (상세 문화 설명 및 시연)</option>
+                      <option value={25}>25초 (축제/음식 집중 소개)</option>
+                    </select>
                   </div>
 
                   <div>
@@ -1996,8 +2809,323 @@ ${clausesCombined}`
                 </div>
               </div>
 
-              {/* Layout Content Grid */}
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              {/* Sub-tab Switcher: Physical Booth Plan vs Digital Layout & Passport */}
+              <div className="flex border-b border-slate-200 gap-2 bg-slate-100/80 p-1.5 rounded-xl">
+                <button
+                  onClick={() => setExpoSubTab("physical")}
+                  className={`flex-1 py-2.5 px-4 text-xs font-bold rounded-lg transition flex items-center justify-center gap-2 cursor-pointer ${
+                    expoSubTab === "physical"
+                      ? "bg-white text-indigo-800 shadow-xs border border-slate-200 font-extrabold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                  }`}
+                >
+                  <span>🎪 실제 체험부스 운영 종합 계획서 & 리플렛</span>
+                  <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-200 font-black px-2 py-0.5 rounded-full">오프라인 실습</span>
+                </button>
+
+                <button
+                  onClick={() => setExpoSubTab("digital")}
+                  className={`flex-1 py-2.5 px-4 text-xs font-bold rounded-lg transition flex items-center justify-center gap-2 cursor-pointer ${
+                    expoSubTab === "digital"
+                      ? "bg-white text-indigo-800 shadow-xs border border-slate-200 font-extrabold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                  }`}
+                >
+                  <span>🗺️ 교실 부스 레이아웃 & 탐구 여권 퀴즈</span>
+                  <span className="text-[9px] bg-indigo-100 text-indigo-800 border border-indigo-200 font-black px-2 py-0.5 rounded-full">시뮬레이션</span>
+                </button>
+              </div>
+
+              {/* 🎪 Sub-Tab 1: Physical Experience Booth Operational Planner */}
+              {expoSubTab === "physical" && (
+                <div className="flex flex-col gap-6 animate-fade-in">
+                  {/* Top Action Banner */}
+                  <div className="bg-gradient-to-r from-amber-500 via-indigo-600 to-indigo-800 p-5 rounded-2xl text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">🎪</span>
+                        <h3 className="text-lg font-black tracking-tight">
+                          {selectedCountry.flag} {selectedCountry.name} 체험부스 운영 종합 계획서
+                        </h3>
+                        <span className="text-[10px] bg-amber-300 text-slate-950 font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                          오프라인 실습 가이드
+                        </span>
+                      </div>
+                      <p className="text-xs text-amber-100 font-medium max-w-2xl">
+                        6학년 다문화 박람회 당일, 후배와 관람객들이 방문할 우리 모둠의 실제 오프라인 체험부스 운영 미션, 6인 역할 분담, 비품 체크리스트를 기획하세요.
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => setShowBoothPosterModal(true)}
+                      className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 shrink-0 hover:scale-102"
+                    >
+                      <span className="text-sm">🖨️</span>
+                      <span>부스 홍보 포스터 / 미니 리플렛 출력 (미리보기)</span>
+                    </button>
+                  </div>
+
+                  {/* Grid: Booth General Info & 4 Main Experience Missions */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    {/* Col 1: Booth Basic Info */}
+                    <div className="lg:col-span-1 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                      <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
+                        <span>📋</span>
+                        <span>부스 개요 & 안내 문구</span>
+                      </h4>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 mb-1">체험 부스 명칭</label>
+                        <input
+                          type="text"
+                          value={boothPlan.boothName}
+                          onChange={(e) => setBoothPlan({...boothPlan, boothName: e.target.value})}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-indigo-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          placeholder="예: 맛과 멋이 넘치는 [나라명] 문화 체험 부스"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 mb-1">부스 위치 / 테이블 동선</label>
+                        <input
+                          type="text"
+                          value={boothPlan.boothLocation}
+                          onChange={(e) => setBoothPlan({...boothPlan, boothLocation: e.target.value})}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          placeholder="예: 6학년 1반 교실 창가 A테이블"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 mb-1">부스 운영 시간</label>
+                        <input
+                          type="text"
+                          value={boothPlan.operatingTime}
+                          onChange={(e) => setBoothPlan({...boothPlan, operatingTime: e.target.value})}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          placeholder="예: 박람회 2~3교시 (10:00 ~ 11:30)"
+                        />
+                      </div>
+
+                      <div className="bg-indigo-50/70 border border-indigo-100 rounded-xl p-3.5 text-xs space-y-1.5 mt-2">
+                        <span className="font-extrabold text-indigo-950 block">💡 실제 체험부스 운영 팁:</span>
+                        <p className="text-slate-600 text-[11px] leading-relaxed">
+                          관람객 한 명당 체험 소요시간을 <strong>3~5분</strong> 정도로 배정하면 대기 줄이 길어지지 않고 활기찬 체험이 가능합니다.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Col 2: 4 Core Hands-on Missions for Visitors */}
+                    <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                      <h4 className="text-sm font-extrabold text-slate-900 flex items-center justify-between border-b border-slate-100 pb-3">
+                        <span className="flex items-center gap-2">
+                          <span>🎯</span>
+                          <span>방문객용 4대 오프라인 체험 미션</span>
+                        </span>
+                        <span className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 font-bold px-2 py-0.5 rounded">
+                          스탬프 지급 조건
+                        </span>
+                      </h4>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                        {/* Mission 1 */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-indigo-900 flex items-center gap-1.5">
+                              <span>🗣️</span> 미션 1: 현지 인사말 나누기
+                            </span>
+                            <span className="text-[9px] bg-indigo-100 text-indigo-700 font-extrabold px-1.5 py-0.5 rounded">언어 체험</span>
+                          </div>
+                          <textarea
+                            rows={2}
+                            value={boothPlan.missions.greeting}
+                            onChange={(e) => setBoothPlan({...boothPlan, missions: {...boothPlan.missions, greeting: e.target.value}})}
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            placeholder="예: 현지 고유 인사말 함께 외치기 및 뜻 알아맞히기"
+                          />
+                        </div>
+
+                        {/* Mission 2 */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-indigo-900 flex items-center gap-1.5">
+                              <span>👗</span> 미션 2: 전통 의상/소품 체험
+                            </span>
+                            <span className="text-[9px] bg-rose-100 text-rose-700 font-extrabold px-1.5 py-0.5 rounded">복식 체험</span>
+                          </div>
+                          <textarea
+                            rows={2}
+                            value={boothPlan.missions.cultureExp}
+                            onChange={(e) => setBoothPlan({...boothPlan, missions: {...boothPlan.missions, cultureExp: e.target.value}})}
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            placeholder="예: 전통 의상 소품 착용 후 포토존 촬영하기"
+                          />
+                        </div>
+
+                        {/* Mission 3 */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-indigo-900 flex items-center gap-1.5">
+                              <span>🍛</span> 미션 3: 음식/향신료 시향 & 퀴즈
+                            </span>
+                            <span className="text-[9px] bg-amber-100 text-amber-800 font-extrabold px-1.5 py-0.5 rounded">식문화 체험</span>
+                          </div>
+                          <textarea
+                            rows={2}
+                            value={boothPlan.missions.quizTaste}
+                            onChange={(e) => setBoothPlan({...boothPlan, missions: {...boothPlan.missions, quizTaste: e.target.value}})}
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            placeholder="예: 대표 음식/향신료 모형 관람 및 이색 문화 퀴즈 풀기"
+                          />
+                        </div>
+
+                        {/* Mission 4 */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-indigo-900 flex items-center gap-1.5">
+                              <span>🎥</span> 미션 4: 1분 홍보 영상 감상
+                            </span>
+                            <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded">영상 관람</span>
+                          </div>
+                          <textarea
+                            rows={2}
+                            value={boothPlan.missions.videoWatch}
+                            onChange={(e) => setBoothPlan({...boothPlan, missions: {...boothPlan.missions, videoWatch: e.target.value}})}
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            placeholder="예: 학생들이 직접 제작한 1분 숏폼 홍보 영상 관람하기"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 3: Group Member Booth Role Assignment Table */}
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                      <div>
+                        <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                          <span>👥</span>
+                          <span>모둠원 오프라인 체험부스 역할 분담표</span>
+                        </h4>
+                        <p className="text-slate-500 text-xs mt-0.5">
+                          박람회 운영 당일 각 모둠원이 담당할 구체적인 부스 운영 과업을 지정하세요.
+                        </p>
+                      </div>
+                      <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-150 px-3 py-1 rounded-full">
+                        등록 인원: {groupMembers.length} / 6명
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                      {groupMembers.map((member, idx) => {
+                        const rolePlan = boothPlan.memberRoles.find(r => r.name === member.name) || {
+                          name: member.name,
+                          role: member.role || "부스 진행",
+                          boothTask: "부스 안내 및 방문객 환영"
+                        };
+
+                        return (
+                          <div key={member.id || idx} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-indigo-600 text-white font-extrabold text-xs flex items-center justify-center shrink-0">
+                                  {idx + 1}
+                                </span>
+                                <span className="font-extrabold text-xs text-slate-900">{member.name}</span>
+                              </div>
+                              <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">
+                                {member.role || "부스 담당"}
+                              </span>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 mb-0.5">체험부스 당일 구체적 역할</label>
+                              <input
+                                type="text"
+                                value={rolePlan.boothTask}
+                                onChange={(e) => {
+                                  const newRoles = [...boothPlan.memberRoles];
+                                  const existingIdx = newRoles.findIndex(r => r.name === member.name);
+                                  if (existingIdx >= 0) {
+                                    newRoles[existingIdx] = { ...newRoles[existingIdx], boothTask: e.target.value };
+                                  } else {
+                                    newRoles.push({ name: member.name, role: member.role, boothTask: e.target.value });
+                                  }
+                                  setBoothPlan({ ...boothPlan, memberRoles: newRoles });
+                                }}
+                                className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                placeholder="예: 1분 영상 재생 태블릿 관리 및 자막 설명"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Section 4: Booth Materials Checklist */}
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                        <span>📦</span>
+                        <span>부스 운영 비품 & 준비물 체크리스트</span>
+                      </h4>
+                      <button
+                        onClick={() => {
+                          const newItem = prompt("새로 추가할 준비물 이름을 입력하세요:");
+                          if (newItem && newItem.trim()) {
+                            setBoothPlan({
+                              ...boothPlan,
+                              checklist: [...boothPlan.checklist, { item: newItem.trim(), checked: false, owner: groupMembers[0]?.name || "모둠 공통" }]
+                            });
+                          }
+                        }}
+                        className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg border border-slate-200 transition"
+                      >
+                        + 준비물 항목 추가
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {boothPlan.checklist.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition ${
+                            item.checked ? "bg-emerald-50/60 border-emerald-200 text-emerald-950" : "bg-slate-50 border-slate-200 text-slate-800"
+                          }`}
+                        >
+                          <label className="flex items-center gap-2.5 cursor-pointer flex-1">
+                            <input
+                              type="checkbox"
+                              checked={item.checked}
+                              onChange={() => {
+                                const updated = [...boothPlan.checklist];
+                                updated[idx].checked = !updated[idx].checked;
+                                setBoothPlan({...boothPlan, checklist: updated});
+                              }}
+                              className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <span className={`text-xs font-semibold ${item.checked ? "line-through text-emerald-800 opacity-80" : ""}`}>
+                              {item.item}
+                            </span>
+                          </label>
+
+                          <span className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-full font-bold text-slate-600 shrink-0">
+                            담당: {item.owner}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 🗺️ Sub-Tab 2: Digital Layout Simulator & Stamp Passport */}
+              {expoSubTab === "digital" && (
+                <div className="flex flex-col gap-6 animate-fade-in">
+                  {/* Layout Content Grid */}
+                  <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 
                 {/* Physical-style Passport Cover Card */}
                 <div className="xl:col-span-1 bg-gradient-to-br from-slate-900 to-indigo-950 p-6 rounded-2xl text-white flex flex-col gap-5 shadow-lg relative overflow-hidden h-[440px]">
@@ -2209,6 +3337,8 @@ ${clausesCombined}`
                   })}
                 </div>
               </div>
+            </div>
+          )}
 
             </div>
           )}
@@ -3092,6 +4222,41 @@ ${clausesCombined}`
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                </div>
+
+                {/* Class Continent Assignment Control Board */}
+                <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 mt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black text-slate-800 flex items-center gap-1.5">
+                      <span>🌍 학급별 담당 대륙 분배 관리 매트릭스</span>
+                    </span>
+                    <span className="text-[9px] text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                      실시간 학급 동기화
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    학급별(6-1, 6-2 등)로 분할 맡기로 한 대륙을 배정하세요. 해당 학급 학생이 접속하면 해당 대륙의 국가가 자동으로 우선 필터링됩니다.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+                    {["6-1", "6-2", "6-3", "6-4", "6-5", "6-6"].map((cls) => (
+                      <div key={cls} className="flex items-center justify-between bg-slate-50 border border-slate-200/80 rounded-lg p-2 text-xs">
+                        <span className="font-black text-indigo-700 shrink-0">{cls} 학급</span>
+                        <select
+                          value={classContinents[cls] || "전체"}
+                          onChange={(e) => handleSaveClassContinent(cls, e.target.value)}
+                          className="bg-white border border-slate-200 rounded px-2 py-1 text-[11px] font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                        >
+                          <option value="전체">🌐 전체 대륙</option>
+                          <option value="아시아 (Asia)">🌏 아시아</option>
+                          <option value="유럽 (Europe)">🏰 유럽</option>
+                          <option value="아프리카 (Africa)">🏜️ 아프리카</option>
+                          <option value="남아메리카 (South America)">💃 남아메리카</option>
+                          <option value="북아메리카 (North America)">🗽 북아메리카</option>
+                          <option value="오세아니아 (Oceania)">🦘 오세아니아</option>
+                        </select>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -4329,6 +5494,150 @@ ${clausesCombined}`
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* 🖨️ PRINTABLE BOOTH POSTER & LEAFLET MODAL */}
+      {showBoothPosterModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fade-in text-left">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+            {/* Modal Control Header (hidden on print) */}
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0 print:hidden">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🖨️</span>
+                <h3 className="text-sm font-extrabold">체험부스 안내 리플렛 & 미니 포스터 (A4 출력)</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl transition flex items-center gap-1 shadow-sm cursor-pointer"
+                >
+                  <span>🖨️</span>
+                  <span>인쇄하기</span>
+                </button>
+                <button
+                  onClick={() => setShowBoothPosterModal(false)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Content Area */}
+            <div className="p-8 overflow-y-auto space-y-6 text-slate-900 font-sans print:p-0 print:overflow-visible">
+              
+              {/* Banner Header */}
+              <div className="border-4 border-indigo-900 rounded-2xl p-6 bg-gradient-to-r from-indigo-900 via-indigo-850 to-slate-900 text-white text-center space-y-2 relative overflow-hidden shadow-md">
+                <div className="flex items-center justify-between text-xs font-mono text-indigo-300 border-b border-indigo-700/60 pb-2">
+                  <span>6학년 다문화 박람회 오프라인 부스</span>
+                  <span>위치: {boothPlan.boothLocation}</span>
+                </div>
+
+                <div className="py-2">
+                  <span className="text-5xl block mb-2">{selectedCountry.flag}</span>
+                  <h1 className="text-2xl font-black tracking-tight text-amber-300">
+                    {boothPlan.boothName || `${selectedCountry.name} 세계문화 체험부스`}
+                  </h1>
+                  <p className="text-xs text-indigo-100 font-medium mt-1">
+                    "{selectedCountry.highlights.greeting}! 우리 모둠과 함께하는 신나는 1분 문화 여행"
+                  </p>
+                </div>
+
+                <div className="flex justify-center gap-4 text-[11px] font-bold bg-indigo-950/80 py-1.5 px-4 rounded-xl border border-indigo-700/50">
+                  <span>⏰ 운영시간: {boothPlan.operatingTime}</span>
+                  <span>•</span>
+                  <span>소속: {groupName}</span>
+                </div>
+              </div>
+
+              {/* 4 Main Missions */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-black text-indigo-950 flex items-center gap-1.5 border-b-2 border-indigo-200 pb-1.5">
+                  <span className="text-base">🎯</span>
+                  <span>부스 방문객 4대 체험 미션 (스탬프 지급)</span>
+                </h3>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="border border-indigo-200 bg-indigo-50/40 p-3 rounded-xl space-y-1">
+                    <span className="text-xs font-extrabold text-indigo-900 block">🗣️ 미션 1: 현지 인사 나누기</span>
+                    <p className="text-[11px] text-slate-700 font-medium">{boothPlan.missions.greeting}</p>
+                  </div>
+
+                  <div className="border border-rose-200 bg-rose-50/40 p-3 rounded-xl space-y-1">
+                    <span className="text-xs font-extrabold text-rose-900 block">👗 미션 2: 전통 의상/소품 체험</span>
+                    <p className="text-[11px] text-slate-700 font-medium">{boothPlan.missions.cultureExp}</p>
+                  </div>
+
+                  <div className="border border-amber-200 bg-amber-50/40 p-3 rounded-xl space-y-1">
+                    <span className="text-xs font-extrabold text-amber-900 block">🍛 미션 3: 음식/향신료 & 퀴즈</span>
+                    <p className="text-[11px] text-slate-700 font-medium">{boothPlan.missions.quizTaste}</p>
+                  </div>
+
+                  <div className="border border-emerald-200 bg-emerald-50/40 p-3 rounded-xl space-y-1">
+                    <span className="text-xs font-extrabold text-emerald-900 block">🎥 미션 4: 1분 홍보 영상 감상</span>
+                    <p className="text-[11px] text-slate-700 font-medium">{boothPlan.missions.videoWatch}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Storyboard Teaser */}
+              {storyboard.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-black text-indigo-950 flex items-center gap-1.5 border-b-2 border-indigo-200 pb-1.5">
+                    <span className="text-base">🎬</span>
+                    <span>1분(60초) 홍보 영상 예고 스토리보드</span>
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {storyboard.slice(0, 4).map((s, idx) => (
+                      <div key={idx} className="bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-center space-y-1">
+                        <span className="text-[10px] font-black bg-indigo-600 text-white px-1.5 py-0.5 rounded">
+                          Scene {idx + 1} ({s.durationSec || 15}초)
+                        </span>
+                        <p className="text-[10px] font-bold text-slate-800 line-clamp-2 mt-1">{s.screenVisual}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Group Members & Roles */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-black text-indigo-950 flex items-center gap-1.5 border-b-2 border-indigo-200 pb-1.5">
+                  <span className="text-base">👥</span>
+                  <span>부스 안내 도우미 모둠원 ({groupMembers.length}명)</span>
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                  {groupMembers.map((m, idx) => {
+                    const roleInfo = boothPlan.memberRoles.find(r => r.name === m.name);
+                    return (
+                      <div key={idx} className="bg-slate-50 border border-slate-200 p-2 rounded-lg flex items-center justify-between">
+                        <span className="font-extrabold text-slate-900">{m.name}</span>
+                        <span className="text-[10px] text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">
+                          {roleInfo?.boothTask || m.role || "부스 안내"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Passport Stamp Verification Box */}
+              <div className="border-2 border-dashed border-indigo-400 bg-indigo-50/30 rounded-2xl p-4 text-center space-y-2">
+                <span className="text-xs font-black text-indigo-900 uppercase tracking-widest block">
+                  💮 세계시민 탐구 여권 스탬프 직인 도장 받는 곳
+                </span>
+                <div className="w-20 h-20 border-2 border-indigo-300 rounded-full mx-auto flex flex-col items-center justify-center text-slate-400 bg-white shadow-inner">
+                  <span className="text-xs font-bold text-indigo-400">{selectedCountry.flag}</span>
+                  <span className="text-[9px] font-extrabold text-indigo-600 mt-0.5">STAMP</span>
+                </div>
+                <p className="text-[10px] text-slate-500 font-medium">
+                  위 4가지 체험 미션 및 1분 영상을 관람하신 후 도장을 찍어드립니다!
+                </p>
+              </div>
+
+            </div>
+          </div>
         </div>
       )}
 

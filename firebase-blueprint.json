@@ -58,6 +58,19 @@
         }
       },
       "required": ["apiKey"]
+    },
+    "ClassroomContinent": {
+      "title": "Classroom Continent",
+      "description": "Assigned continent for a specific classroom",
+      "type": "object",
+      "properties": {
+        "continent": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Assigned continent name"
+        }
+      },
+      "required": ["continent"]
     }
   },
   "firestore": {
@@ -78,6 +91,12 @@
         "$ref": "#/entities/TeacherApiKey"
       },
       "description": "Stores class-specific custom Gemini API Keys provided by teachers"
+    },
+    "/classroom_continents/{classCode}": {
+      "schema": {
+        "$ref": "#/entities/ClassroomContinent"
+      },
+      "description": "Stores assigned continents for each class"
     }
   }
 }

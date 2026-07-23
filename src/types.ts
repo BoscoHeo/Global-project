@@ -19,6 +19,21 @@ export interface StoryboardScene {
   screenVisual: string;
   audioText: string;
   notes: string;
+  durationSec?: number;
+}
+
+export interface OfflineBoothPlan {
+  boothName: string;
+  boothLocation: string;
+  operatingTime: string;
+  missions: {
+    greeting: string;
+    cultureExp: string;
+    quizTaste: string;
+    videoWatch: string;
+  };
+  memberRoles: { name: string; role: string; boothTask: string }[];
+  checklist: { item: string; checked: boolean; owner: string }[];
 }
 
 export interface StoryboardData {
