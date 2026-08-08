@@ -992,24 +992,24 @@ export default function App() {
     boothLocation: "6학년 각 교실 중앙 부스 A",
     operatingTime: "박람회 2~3교시 (10:00 ~ 11:30)",
     missions: {
-      greeting: "현지 고유 인사말 함께 외치기 & 뜻 알아맞히기",
-      cultureExp: "전통 의상 소품 입어보고 기념 포토존 촬영하기",
-      quizTaste: "대표 음식/향신료 시향 및 이색 문화 퀴즈 풀기",
-      videoWatch: "1분 숏폼 홍보 영상 관람하고 여권 도장 획득하기"
+      greeting: "1단계 [우드락 설명 청취]: 우드락 게시판에 정리된 국가 문화·인사말·음식 설명 듣기",
+      cultureExp: "2단계 [실제 문화 체험]: 전통 의상 소품 착용 포토존 및 1분 홍보 영상 감상하기",
+      quizTaste: "3단계 [우드락 퀴즈 맞히기]: 우드락 게시판 내용을 바탕으로 OX/객관식 퀴즈 풀기",
+      videoWatch: "4단계 [여권 스탬프 획득]: 퀴즈 성공 시 세계시민 탐구 여권에 스탬프 도장 찍기"
     },
     memberRoles: [
-      { name: "김민재", role: "기획/연출", boothTask: "부스 총괄 안내 & 방문객 환영" },
-      { name: "이하은", role: "대본/리포터", boothTask: "1분 홍보 영상 태블릿 상영 및 설명" },
-      { name: "박준우", role: "자료조사", boothTask: "전통 인사법 시연 & 미션 성공 판정" },
-      { name: "최수아", role: "촬영담당", boothTask: "의상 소품 착용 도우미 & 포토존 촬영" }
+      { name: "김민재", role: "기획/연출", boothTask: "우드락 게시판 설명 안내 & 방문객 환영" },
+      { name: "이하은", role: "대본/리포터", boothTask: "1분 홍보 영상 태블릿 상영 및 시연" },
+      { name: "박준우", role: "자료조사", boothTask: "우드락 내용 기반 퀴즈 출제 & 정답 확인" },
+      { name: "최수아", role: "촬영담당", boothTask: "전통 의상 착용 도우미 & 여권 스탬프 찍어주기" }
     ],
     checklist: [
-      { item: "부스 안내 미니 간판 및 홍보 포스터", checked: true, owner: "김민재" },
+      { item: "우드락 폼보드 게시판 (문화/인사/음식/의상 핵심 설명 및 사진 정리판)", checked: true, owner: "김민재" },
+      { item: "우드락 설명 내용 기반 퀴즈 카드 & 퀴즈함", checked: true, owner: "박준우" },
       { item: "1분 홍보 영상 상영용 태블릿 / 노트북", checked: true, owner: "이하은" },
-      { item: "전통 의상 소품 및 장신구 모형", checked: false, owner: "최수아" },
-      { item: "대표 음식/향신료 시향 재료 및 판넬", checked: false, owner: "박준우" },
-      { item: "세계시민 여권 스탬프(도장) 및 퀴즈함", checked: true, owner: "김민재" },
-      { item: "방문객 기념 스티커 및 칭찬 스탬프판", checked: false, owner: "모둠 공통" }
+      { item: "전통 의상 소품 및 장신구 모형 (체험용)", checked: false, owner: "최수아" },
+      { item: "세계시민 탐구 여권 스탬프(도장) 및 칭찬 스티커", checked: true, owner: "모둠 공통" },
+      { item: "방문객 대기선 및 안내 부스 마감 판넬", checked: false, owner: "모둠 공통" }
     ]
   });
 
@@ -1058,6 +1058,68 @@ export default function App() {
     pledge3: ""
   });
   const [signedOath, setSignedOath] = useState<boolean>(false);
+
+  // Persistent LocalStorage Auto-Save & Auto-Restore for offline & server restart resilience
+  useEffect(() => {
+    try {
+      const savedGroup = localStorage.getItem("expo_groupName");
+      if (savedGroup) setGroupName(savedGroup);
+
+      const savedMembers = localStorage.getItem("expo_groupMembers");
+      if (savedMembers) setGroupMembers(JSON.parse(savedMembers));
+
+      const savedSB = localStorage.getItem("expo_storyboard");
+      if (savedSB) setStoryboard(JSON.parse(savedSB));
+
+      const savedBooth = localStorage.getItem("expo_boothPlan");
+      if (savedBooth) setBoothPlan(JSON.parse(savedBooth));
+
+      const savedStamps = localStorage.getItem("expo_userPassportStamps");
+      if (savedStamps) setUserPassportStamps(JSON.parse(savedStamps));
+
+      const savedResearch = localStorage.getItem("expo_studentResearch");
+      if (savedResearch) setStudentResearch(JSON.parse(savedResearch));
+
+      const savedRes = localStorage.getItem("expo_resolution");
+      if (savedRes) setResolution(JSON.parse(savedRes));
+
+      const savedClauses = localStorage.getItem("expo_operativeClauses");
+      if (savedClauses) setOperativeClauses(JSON.parse(savedClauses));
+
+      const savedCamp = localStorage.getItem("expo_campaignInput");
+      if (savedCamp) setCampaignInput(JSON.parse(savedCamp));
+
+      const savedOath = localStorage.getItem("expo_citizenOath");
+      if (savedOath) setCitizenOath(JSON.parse(savedOath));
+
+      const savedSigned = localStorage.getItem("expo_signedOath");
+      if (savedSigned) setSignedOath(JSON.parse(savedSigned));
+
+      const savedVid = localStorage.getItem("expo_videoUrl");
+      if (savedVid) setVideoUrl(savedVid);
+    } catch (e) {
+      console.error("Failed to restore from localStorage:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("expo_groupName", groupName);
+      localStorage.setItem("expo_groupMembers", JSON.stringify(groupMembers));
+      localStorage.setItem("expo_storyboard", JSON.stringify(storyboard));
+      localStorage.setItem("expo_boothPlan", JSON.stringify(boothPlan));
+      localStorage.setItem("expo_userPassportStamps", JSON.stringify(userPassportStamps));
+      localStorage.setItem("expo_studentResearch", JSON.stringify(studentResearch));
+      localStorage.setItem("expo_resolution", JSON.stringify(resolution));
+      localStorage.setItem("expo_operativeClauses", JSON.stringify(operativeClauses));
+      localStorage.setItem("expo_campaignInput", JSON.stringify(campaignInput));
+      localStorage.setItem("expo_citizenOath", JSON.stringify(citizenOath));
+      localStorage.setItem("expo_signedOath", JSON.stringify(signedOath));
+      localStorage.setItem("expo_videoUrl", videoUrl);
+    } catch (e) {
+      console.error("Failed to save to localStorage:", e);
+    }
+  }, [groupName, groupMembers, storyboard, boothPlan, userPassportStamps, studentResearch, resolution, operativeClauses, campaignInput, citizenOath, signedOath, videoUrl]);
 
   // Helper functions to populate sample or reset for students
   const loadEgyptSample = () => {
@@ -2863,6 +2925,63 @@ ${clausesCombined}`
                       <span className="text-sm">🖨️</span>
                       <span>부스 홍보 포스터 / 미니 리플렛 출력 (미리보기)</span>
                     </button>
+                  </div>
+
+                  {/* 🪧 Step-by-Step Woodrock Booth Operational Flow Banner */}
+                  <div className="bg-gradient-to-r from-amber-50 via-indigo-50 to-emerald-50 border-2 border-indigo-200 rounded-2xl p-4.5 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🪧</span>
+                        <h4 className="text-sm font-black text-indigo-950">
+                          우드락 게시판 설명 ➡️ 체험 ➡️ 퀴즈 ➡️ 스탬프 4단계 운영 동선
+                        </h4>
+                      </div>
+                      <span className="text-[10px] bg-indigo-600 text-white font-extrabold px-2.5 py-0.5 rounded-full">
+                        실제 체험부스 진행 프로세스
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 text-xs">
+                      <div className="bg-white border border-amber-200 p-3 rounded-xl shadow-2xs space-y-1">
+                        <div className="flex items-center gap-1.5 font-extrabold text-amber-900">
+                          <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[11px] flex items-center justify-center shrink-0">1</span>
+                          <span>🪧 우드락 설명 청취</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 font-medium leading-tight">
+                          우드락 폼보드 게시판에 정리한 국가 문화/인사/음식/의상 핵심 설명을 들려줍니다.
+                        </p>
+                      </div>
+
+                      <div className="bg-white border border-rose-200 p-3 rounded-xl shadow-2xs space-y-1">
+                        <div className="flex items-center gap-1.5 font-extrabold text-rose-900">
+                          <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[11px] flex items-center justify-center shrink-0">2</span>
+                          <span>👐 문화 & 영상 체험</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 font-medium leading-tight">
+                          전통 의상 소품을 착용해보거나 모둠에서 제작한 1분 홍보 영상을 감상합니다.
+                        </p>
+                      </div>
+
+                      <div className="bg-white border border-indigo-200 p-3 rounded-xl shadow-2xs space-y-1">
+                        <div className="flex items-center gap-1.5 font-extrabold text-indigo-900">
+                          <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] flex items-center justify-center shrink-0">3</span>
+                          <span>❓ 우드락 퀴즈 도전</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 font-medium leading-tight">
+                          방금 우드락 게시판에서 들은 설명 내용을 바탕으로 OX/단답형 퀴즈를 풀어봅니다.
+                        </p>
+                      </div>
+
+                      <div className="bg-white border border-emerald-200 p-3 rounded-xl shadow-2xs space-y-1">
+                        <div className="flex items-center gap-1.5 font-extrabold text-emerald-900">
+                          <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[11px] flex items-center justify-center shrink-0">4</span>
+                          <span>💮 여권 스탬프 획득</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 font-medium leading-tight">
+                          퀴즈를 맞힌 관람객의 탐구 여권에 {selectedCountry.name} 스탬프 도장을 찍어줍니다!
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Grid: Booth General Info & 4 Main Experience Missions */}
