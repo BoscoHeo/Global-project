@@ -1066,36 +1066,68 @@ const CLASS_SPECIFIC_4_COUNTRIES: Record<string, string[]> = {
   "6-7": ["PT", "RU", "HU", "IT"]  // 7반: 동&남유럽 4개국 (포르투갈, 러시아, 헝가리, 이탈리아)
 };
 
+// Obfuscated class security tokens to prevent students from guessing class URL parameters
+const CLASS_SECURITY_TOKENS: Record<string, string> = {
+  "6-1": "c61-k89a",
+  "6-2": "c62-m31b",
+  "6-3": "c63-k47c",
+  "6-4": "c64-p92d",
+  "6-5": "c65-v15e",
+  "6-6": "c66-q83f",
+  "6-7": "c67-z54g"
+};
+
+const TOKEN_TO_CLASS: Record<string, string> = {
+  "c61-k89a": "6-1",
+  "c62-m31b": "6-2",
+  "c63-k47c": "6-3",
+  "c64-p92d": "6-4",
+  "c65-v15e": "6-5",
+  "c66-q83f": "6-6",
+  "c67-z54g": "6-7"
+};
+
 export default function App() {
   const [classCode, setClassCode] = useState<string>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      const urlClass = params.get("class") || params.get("classCode");
-      if (urlClass && ["6-1", "6-2", "6-3", "6-4", "6-5", "6-6", "6-7"].includes(urlClass)) {
-        return urlClass;
+      const urlClass = params.get("class") || params.get("classCode") || params.get("code");
+      if (urlClass) {
+        if (TOKEN_TO_CLASS[urlClass]) {
+          return TOKEN_TO_CLASS[urlClass];
+        }
+        if (["6-1", "6-2", "6-3", "6-4", "6-5", "6-6", "6-7"].includes(urlClass)) {
+          return urlClass;
+        }
       }
     } catch (e) {}
     return "6-1";
   });
 
-  // Sync current classCode to URL search params without reloading
+  // Sync current classCode to URL search params using security token
   useEffect(() => {
     try {
       const url = new URL(window.location.href);
-      if (url.searchParams.get("class") !== classCode) {
-        url.searchParams.set("class", classCode);
+      const token = CLASS_SECURITY_TOKENS[classCode] || classCode;
+      if (url.searchParams.get("class") !== token) {
+        url.searchParams.set("class", token);
+        url.searchParams.delete("classCode");
+        url.searchParams.delete("code");
         window.history.replaceState(null, "", url.toString());
       }
     } catch (e) {}
   }, [classCode]);
 
   const getShareUrlForClass = (cCode: string) => {
+    const token = CLASS_SECURITY_TOKENS[cCode] || cCode;
     try {
       const url = new URL(window.location.href);
-      url.searchParams.set("class", cCode);
+      url.searchParams.set("class", token);
+      url.searchParams.delete("classCode");
+      url.searchParams.delete("code");
       return url.toString();
     } catch (e) {
-      return `${window.location.origin}${window.location.pathname}?class=${cCode}`;
+      return `${window.location.origin}${window.location.pathname}?class=${token}`;
     }
   };
 
