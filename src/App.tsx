@@ -1592,45 +1592,55 @@ export default function App() {
 
   // Filter countries by class dedicated assignment, continent selection AND search term
   const filteredCountries = countries.filter(country => {
-    // 1. Strict Class-Only Access Filter (when isClassOnlyMode is ON)
-    if (isClassOnlyMode) {
-      if (classCode === "6-1") {
-        // 1반: 아프리카 (가나, 마다가스카르, 남아공, 이집트)
-        if (!country.continent.toLowerCase().includes("아프리카") && !country.continent.toLowerCase().includes("africa")) return false;
-      } else if (classCode === "6-2") {
-        // 2반: 북아메리카
-        if (!country.continent.toLowerCase().includes("북아메리카") && !country.continent.toLowerCase().includes("north america")) return false;
-      } else if (classCode === "6-3") {
-        // 3반: 남아메리카 (브라질, 아르헨티나, 칠레, 베네수엘라)
-        if (!country.continent.toLowerCase().includes("남아메리카") && !country.continent.toLowerCase().includes("south america")) return false;
-      } else if (classCode === "6-4") {
-        // 4반: 오세아니아 (뉴질랜드, 피지, 팔라우, 사모아)
-        if (!country.continent.toLowerCase().includes("오세아니아") && !country.continent.toLowerCase().includes("oceania")) return false;
-      } else if (classCode === "6-5") {
-        // 5반: 아시아
-        if (!country.continent.toLowerCase().includes("아시아") && !country.continent.toLowerCase().includes("asia")) return false;
-      } else if (classCode === "6-6") {
-        // 6반: 북&서유럽 (프랑스, 노르웨이, 영국, 독일)
-        const westNorthCodes = ["FR", "NO", "GB", "DE"];
-        const isMatch = westNorthCodes.includes(country.code) || 
-          (country.continent.toLowerCase().includes("유럽") && !["PT", "RU", "HU", "IT"].includes(country.code));
-        if (!isMatch) return false;
-      } else if (classCode === "6-7") {
-        // 7반: 동&남유럽 (포르투갈, 러시아, 헝가리, 이탈리아)
-        const eastSouthCodes = ["PT", "RU", "HU", "IT"];
-        const isMatch = eastSouthCodes.includes(country.code) || 
-          (country.continent.toLowerCase().includes("유럽") && !["FR", "NO", "GB", "DE"].includes(country.code));
-        if (!isMatch) return false;
+    // Student mode (or explicitly turned on) forces Class Isolation
+    const isEffectiveClassOnly = !isTeacherUnlocked || isClassOnlyMode;
+
+    if (isEffectiveClassOnly) {
+      // First check if teacher explicitly set classContinents[classCode]
+      const assigned = classContinents[classCode];
+      if (assigned && assigned !== "전체") {
+        const assignedTerm = assigned.split(" ")[0].toLowerCase();
+        if (!country.continent.toLowerCase().includes(assignedTerm)) return false;
       } else {
-        // Custom class code fallback
-        const assigned = classContinents[classCode];
-        if (assigned && assigned !== "전체") {
-          const assignedTerm = assigned.split(" ")[0].toLowerCase();
-          if (!country.continent.toLowerCase().includes(assignedTerm)) return false;
+        // Default class mappings if not custom set
+        if (classCode === "6-1") {
+          // 1반: 아프리카 (가나, 마다가스카르, 남아공, 이집트)
+          if (!country.continent.toLowerCase().includes("아프리카") && !country.continent.toLowerCase().includes("africa")) return false;
+        } else if (classCode === "6-2") {
+          // 2반: 북아메리카
+          if (!country.continent.toLowerCase().includes("북아메리카") && !country.continent.toLowerCase().includes("north america")) return false;
+        } else if (classCode === "6-3") {
+          // 3반: 남아메리카 (브라질, 아르헨티나, 칠레, 베네수엘라)
+          if (!country.continent.toLowerCase().includes("남아메리카") && !country.continent.toLowerCase().includes("south america")) return false;
+        } else if (classCode === "6-4") {
+          // 4반: 오세아니아 (뉴질랜드, 피지, 팔라우, 사모아)
+          if (!country.continent.toLowerCase().includes("오세아니아") && !country.continent.toLowerCase().includes("oceania")) return false;
+        } else if (classCode === "6-5") {
+          // 5반: 아시아
+          if (!country.continent.toLowerCase().includes("아시아") && !country.continent.toLowerCase().includes("asia")) return false;
+        } else if (classCode === "6-6") {
+          // 6반: 북&서유럽 (프랑스, 노르웨이, 영국, 독일)
+          const westNorthCodes = ["FR", "NO", "GB", "DE"];
+          const isMatch = westNorthCodes.includes(country.code) || 
+            (country.continent.toLowerCase().includes("유럽") && !["PT", "RU", "HU", "IT"].includes(country.code));
+          if (!isMatch) return false;
+        } else if (classCode === "6-7") {
+          // 7반: 동&남유럽 (포르투갈, 러시아, 헝가리, 이탈리아)
+          const eastSouthCodes = ["PT", "RU", "HU", "IT"];
+          const isMatch = eastSouthCodes.includes(country.code) || 
+            (country.continent.toLowerCase().includes("유럽") && !["FR", "NO", "GB", "DE"].includes(country.code));
+          if (!isMatch) return false;
+        } else {
+          // Custom class code fallback
+          const assignedFallback = classContinents[classCode];
+          if (assignedFallback && assignedFallback !== "전체") {
+            const assignedTerm = assignedFallback.split(" ")[0].toLowerCase();
+            if (!country.continent.toLowerCase().includes(assignedTerm)) return false;
+          }
         }
       }
     } else {
-      // 2. Standard Continent Filter Tab (when Class-Only Mode is OFF)
+      // 2. Standard Continent Filter Tab (when Teacher has unlocked and turned Class-Only Mode OFF)
       const continentTerm = selectedContinentFilter.split(" ")[0].toLowerCase();
       const matchesContinent = 
         selectedContinentFilter === "전체" || 
@@ -2418,41 +2428,68 @@ ${clausesCombined}`
               <div>
                 <label className="text-[10px] uppercase tracking-wider font-extrabold text-indigo-600 block mb-1 flex items-center justify-between">
                   <span>🌍 학급 담당 대륙 (모둠 할당)</span>
-                  <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1 rounded font-bold">자동 필터</span>
+                  <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1 rounded font-bold">
+                    {isTeacherUnlocked ? "선생님 설정" : "자동 격리"}
+                  </span>
                 </label>
-                <select 
-                  value={classContinents[classCode] || "전체"}
-                  onChange={(e) => handleSaveClassContinent(classCode, e.target.value)}
-                  className="w-full bg-indigo-50/50 border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer"
-                >
-                  <option value="전체">🌐 전체 (모든 대륙 탐구)</option>
-                  <option value="아시아 (Asia)">🌏 아시아 (Asia)</option>
-                  <option value="유럽 (Europe)">🏰 유럽 (Europe)</option>
-                  <option value="아프리카 (Africa)">🏜️ 아프리카 (Africa)</option>
-                  <option value="남아메리카 (South America)">💃 남아메리카 (South America)</option>
-                  <option value="북아메리카 (North America)">🗽 북아메리카 (North America)</option>
-                  <option value="오세아니아 (Oceania)">🦘 오세아니아 (Oceania)</option>
-                </select>
+                {isTeacherUnlocked ? (
+                  <select 
+                    value={classContinents[classCode] || "전체"}
+                    onChange={(e) => handleSaveClassContinent(classCode, e.target.value)}
+                    className="w-full bg-indigo-50/50 border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="전체">🌐 전체 (모든 대륙 탐구)</option>
+                    <option value="아시아 (Asia)">🌏 아시아 (Asia)</option>
+                    <option value="유럽 (Europe)">🏰 유럽 (Europe)</option>
+                    <option value="아프리카 (Africa)">🏜️ 아프리카 (Africa)</option>
+                    <option value="남아메리카 (South America)">💃 남아메리카 (South America)</option>
+                    <option value="북아메리카 (North America)">🗽 북아메리카 (North America)</option>
+                    <option value="오세아니아 (Oceania)">🦘 오세아니아 (Oceania)</option>
+                  </select>
+                ) : (
+                  <div className="w-full bg-indigo-50/90 border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs font-black text-indigo-900 flex items-center justify-between shadow-2xs">
+                    <span className="flex items-center gap-1.5">
+                      <span>🌍</span>
+                      <span>{classContinents[classCode] || "담당 대륙 배정 완료"}</span>
+                    </span>
+                    <span className="text-[9.5px] bg-indigo-200 text-indigo-800 px-1.5 py-0.5 rounded font-black flex items-center gap-0.5">
+                      <span>🔒</span>
+                      <span>교사 잠금</span>
+                    </span>
+                  </div>
+                )}
 
-                <button
-                  onClick={() => setIsClassOnlyMode(!isClassOnlyMode)}
-                  className={`w-full mt-2 py-1.5 px-2.5 rounded-lg text-[10.5px] font-black transition flex items-center justify-between cursor-pointer border ${
-                    isClassOnlyMode
-                      ? "bg-amber-50 border-amber-300 text-amber-900 shadow-2xs"
-                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
-                  title="자기 학급에 배정된 대륙/국가만 접속 허용할지 전체 국가 탐구를 허용할지 설정합니다"
-                >
-                  <span className="flex items-center gap-1">
-                    <span>{isClassOnlyMode ? "🔒" : "🌐"}</span>
-                    <span>학급 배정 국가만 접속</span>
-                  </span>
-                  <span className={`text-[9.5px] px-1.5 py-0.5 rounded font-black ${
-                    isClassOnlyMode ? "bg-amber-500 text-white" : "bg-slate-200 text-slate-600"
-                  }`}>
-                    {isClassOnlyMode ? "ON" : "OFF"}
-                  </span>
-                </button>
+                {isTeacherUnlocked ? (
+                  <button
+                    onClick={() => setIsClassOnlyMode(!isClassOnlyMode)}
+                    className={`w-full mt-2 py-1.5 px-2.5 rounded-lg text-[10.5px] font-black transition flex items-center justify-between cursor-pointer border ${
+                      isClassOnlyMode
+                        ? "bg-amber-50 border-amber-300 text-amber-900 shadow-2xs"
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                    title="자기 학급에 배정된 대륙/국가만 접속 허용할지 전체 국가 탐구를 허용할지 설정합니다"
+                  >
+                    <span className="flex items-center gap-1">
+                      <span>{isClassOnlyMode ? "🔒" : "🌐"}</span>
+                      <span>학급 배정 국가만 접속</span>
+                    </span>
+                    <span className={`text-[9.5px] px-1.5 py-0.5 rounded font-black ${
+                      isClassOnlyMode ? "bg-amber-500 text-white" : "bg-slate-200 text-slate-600"
+                    }`}>
+                      {isClassOnlyMode ? "ON" : "OFF"}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="w-full mt-2 py-1.5 px-2.5 rounded-lg text-[10.5px] font-black border bg-amber-50/90 border-amber-300/80 text-amber-900 shadow-2xs flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <span>🔒</span>
+                      <span>{classCode}학급 데이터 완전 격리 중</span>
+                    </span>
+                    <span className="text-[9.5px] bg-amber-500 text-white px-1.5 py-0.5 rounded font-black">
+                      격리 ON
+                    </span>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 block mb-1">👥 실천 탐구 모둠명</label>
@@ -2799,23 +2836,29 @@ ${clausesCombined}`
                       <span className="text-indigo-600 underline underline-offset-2 font-black">{classContinents[classCode] || "전체"}</span>
                       
                       {/* Class Dedicated Access Switch */}
-                      <button
-                        onClick={() => {
-                          const nextMode = !isClassOnlyMode;
-                          setIsClassOnlyMode(nextMode);
-                          if (nextMode) {
-                            setSelectedContinentFilter(classContinents[classCode] || "전체");
-                          }
-                        }}
-                        className={`ml-1 px-2.5 py-1 rounded-lg text-[10.5px] font-black transition flex items-center gap-1 shadow-2xs cursor-pointer ${
-                          isClassOnlyMode 
-                            ? "bg-amber-500 hover:bg-amber-600 text-white" 
-                            : "bg-slate-200 hover:bg-slate-300 text-slate-700"
-                        }`}
-                        title="클릭하여 자기 학급 국가만 열람하거나 전체 국가 목록을 해제합니다"
-                      >
-                        {isClassOnlyMode ? "🔒 자기 학급 전용 접속 [ON]" : "🌐 전체 국가 탐구 [OFF]"}
-                      </button>
+                      {isTeacherUnlocked ? (
+                        <button
+                          onClick={() => {
+                            const nextMode = !isClassOnlyMode;
+                            setIsClassOnlyMode(nextMode);
+                            if (nextMode) {
+                              setSelectedContinentFilter(classContinents[classCode] || "전체");
+                            }
+                          }}
+                          className={`ml-1 px-2.5 py-1 rounded-lg text-[10.5px] font-black transition flex items-center gap-1 shadow-2xs cursor-pointer ${
+                            isClassOnlyMode 
+                              ? "bg-amber-500 hover:bg-amber-600 text-white" 
+                              : "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                          }`}
+                          title="클릭하여 자기 학급 국가만 열람하거나 전체 국가 목록을 해제합니다"
+                        >
+                          {isClassOnlyMode ? "🔒 자기 학급 전용 접속 [ON]" : "🌐 전체 국가 탐구 [OFF]"}
+                        </button>
+                      ) : (
+                        <span className="ml-1 px-2.5 py-1 rounded-lg text-[10.5px] font-black bg-amber-500 text-white flex items-center gap-1 shadow-2xs">
+                          🔒 {classCode}학급 전용 격리 [ON]
+                        </span>
+                      )}
 
                       <button
                         onClick={() => setShowClassAllocationModal(true)}
@@ -2826,8 +2869,8 @@ ${clausesCombined}`
                       </button>
                     </div>
                     <div className="text-[10px] text-slate-500 font-medium mt-0.5">
-                      {isClassOnlyMode 
-                        ? `🔒 [${classCode}학급 전용 모드] - ${classContinents[classCode] || "배정 대륙"} 국가들만 표시 중입니다 (${filteredCountries.length}개 국가)`
+                      {(!isTeacherUnlocked || isClassOnlyMode) 
+                        ? `🔒 [${classCode}학급 전용 격리 모드] - ${classContinents[classCode] || "배정 대륙"} 탐구 전용 (${filteredCountries.length}개 국가)`
                         : `🌐 [전체 탐구 모드] - 지구촌 전체 국가를 자유롭게 열람 중입니다 (${filteredCountries.length}개 국가)`}
                     </div>
                   </div>
@@ -2851,8 +2894,19 @@ ${clausesCombined}`
                       <button
                         key={tab.id}
                         onClick={() => {
-                          if (isClassOnlyMode) {
-                            setIsClassOnlyMode(false);
+                          if (!isTeacherUnlocked) {
+                            const currentAssigned = classContinents[classCode] || "배정 대륙";
+                            const assignedTerm = currentAssigned.split(" ")[0].toLowerCase();
+                            const tabTerm = tab.id.split(" ")[0].toLowerCase();
+                            
+                            if (tab.id !== "전체" && !tabTerm.includes(assignedTerm) && !assignedTerm.includes(tabTerm)) {
+                              alert(`🔒 [${classCode}학급 전용 격리 접속 중]\n\n${classCode}반은 선생님께서 지정하신 [${currentAssigned}] 담당 국가들만 탐구하도록 데이터 범위가 안전 격리되어 있습니다.\n\n다른 대륙 국가 변경 및 열람은 교사 인증이 필요합니다.`);
+                              return;
+                            }
+                          } else {
+                            if (isClassOnlyMode) {
+                              setIsClassOnlyMode(false);
+                            }
                           }
                           setSelectedContinentFilter(tab.id);
                         }}
@@ -2869,18 +2923,20 @@ ${clausesCombined}`
                 </div>
               </div>
 
-              {isClassOnlyMode && (
+              {(!isTeacherUnlocked || isClassOnlyMode) && (
                 <div className="bg-amber-50/90 border border-amber-200/80 rounded-xl px-3.5 py-2 text-xs font-bold text-amber-900 flex items-center justify-between gap-2 shadow-2xs">
                   <div className="flex items-center gap-2">
                     <span className="text-amber-600">🔒</span>
-                    <span><strong>[{classCode}학급 전용 접속 모드]</strong> 가 활성화되어 <strong>{classContinents[classCode] || "배정 대륙"}</strong> 담당 국가만 나타납니다.</span>
+                    <span><strong>[{classCode}학급 전용 완전 격리 접속 모드]</strong> 가 작동 중입니다. <strong>{classContinents[classCode] || "배정 대륙"}</strong> 담당 데이터만 제한 표시됩니다.</span>
                   </div>
-                  <button
-                    onClick={() => setIsClassOnlyMode(false)}
-                    className="text-amber-800 hover:text-amber-950 underline text-[11px] font-black shrink-0 cursor-pointer"
-                  >
-                    모든 대륙 국가 잠금 해제 🔓
-                  </button>
+                  {isTeacherUnlocked && (
+                    <button
+                      onClick={() => setIsClassOnlyMode(false)}
+                      className="text-amber-800 hover:text-amber-950 underline text-[11px] font-black shrink-0 cursor-pointer"
+                    >
+                      모든 대륙 국가 잠금 해제 🔓
+                    </button>
+                  )}
                 </div>
               )}
 
