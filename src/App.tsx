@@ -2409,7 +2409,13 @@ ${clausesCombined}`
                       <span>{classCode.replace('-', '학년 ')}반 학생 모드</span>
                     </span>
                     <button
-                      onClick={() => setActiveTab("teacher")}
+                      onClick={() => {
+                        if (isTeacherUnlocked) {
+                          setActiveTab("teacher");
+                        } else {
+                          setShowTeacherUnlockModal(true);
+                        }
+                      }}
                       className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
                       title="선생님 전용 관리 모드로 전환"
                     >
@@ -4516,7 +4522,8 @@ ${clausesCombined}`
 
           {/* Active Tab 6: Teacher Hub Evaluation Port */}
           {activeTab === "teacher" && (
-            <div className="flex flex-col gap-6 animate-fade-in text-left">
+            isTeacherUnlocked ? (
+              <div className="flex flex-col gap-6 animate-fade-in text-left">
               
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-rose-100 pb-5">
                 <div>
@@ -5571,6 +5578,21 @@ ${clausesCombined}`
               })()}
 
             </div>
+            ) : (
+              <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center max-w-lg mx-auto shadow-xl space-y-4 my-12 animate-fade-in">
+                <div className="w-16 h-16 rounded-full bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto text-3xl">🔒</div>
+                <h3 className="text-xl font-black text-slate-800">교사 전용 결과 수합 허브 접근 잠금</h3>
+                <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                  학생 성적 및 모둠별 수행평가 결과 수합 자료를 열람하려면 선생님 전용 보안 암호 인증이 필요합니다.
+                </p>
+                <button
+                  onClick={() => setShowTeacherUnlockModal(true)}
+                  className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition shadow-md cursor-pointer"
+                >
+                  🔑 교사 보안 암호(PIN) 입력하기
+                </button>
+              </div>
+            )
           )}
 
         </main>
