@@ -13,10 +13,16 @@ import {
   setDoc, 
   deleteDoc, 
   writeBatch,
-  Firestore
+  Firestore,
+  setLogLevel
 } from "firebase/firestore";
 
 dotenv.config();
+
+// Mute non-fatal client SDK idle stream connection warnings in Node environment
+try {
+  setLogLevel("error");
+} catch (e) {}
 
 const app = express();
 const PORT = process.env.PORT || 3000;

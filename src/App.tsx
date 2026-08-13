@@ -2370,35 +2370,53 @@ ${clausesCombined}`
             <div className="space-y-2 mb-3">
               <div>
                 <label className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 block mb-1">🏫 소속 학급/교실 코드</label>
-                <div className="flex gap-1.5">
-                  <select 
-                    value={classCode}
-                    onChange={(e) => setClassCode(e.target.value)}
-                    className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-black text-indigo-700 bg-indigo-50/15 focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:bg-white cursor-pointer"
-                  >
-                    <option value="6-1">6학년 1반 (6-1)</option>
-                    <option value="6-2">6학년 2반 (6-2)</option>
-                    <option value="6-3">6학년 3반 (6-3)</option>
-                    <option value="6-4">6학년 4반 (6-4)</option>
-                    <option value="6-5">6학년 5반 (6-5)</option>
-                    <option value="6-6">6학년 6반 (6-6)</option>
-                    <option value="6-7">6학년 7반 (6-7)</option>
-                  </select>
-                  <button
-                    onClick={() => handleCopyClassLink(classCode)}
-                    className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs shrink-0"
-                    title={`${classCode}학급 전용 접속 URL 링크 복사`}
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    <span>공유</span>
-                  </button>
-                </div>
-                <button
-                  onClick={() => handleCopyClassLink(classCode)}
-                  className="w-full mt-1.5 py-1 px-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200/80 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
-                >
-                  <span>🔗 {classCode}학급 학생 배포용 링크 복사</span>
-                </button>
+                {isTeacherUnlocked ? (
+                  <>
+                    <div className="flex gap-1.5">
+                      <select 
+                        value={classCode}
+                        onChange={(e) => setClassCode(e.target.value)}
+                        className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-black text-indigo-700 bg-indigo-50/15 focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:bg-white cursor-pointer"
+                      >
+                        <option value="6-1">6학년 1반 (6-1)</option>
+                        <option value="6-2">6학년 2반 (6-2)</option>
+                        <option value="6-3">6학년 3반 (6-3)</option>
+                        <option value="6-4">6학년 4반 (6-4)</option>
+                        <option value="6-5">6학년 5반 (6-5)</option>
+                        <option value="6-6">6학년 6반 (6-6)</option>
+                        <option value="6-7">6학년 7반 (6-7)</option>
+                      </select>
+                      <button
+                        onClick={() => handleCopyClassLink(classCode)}
+                        className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs shrink-0"
+                        title={`${classCode}학급 전용 접속 URL 링크 복사`}
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span>공유</span>
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => handleCopyClassLink(classCode)}
+                      className="w-full mt-1.5 py-1 px-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200/80 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <span>🔗 {classCode}학급 학생 배포용 링크 복사</span>
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
+                    <span className="text-xs font-black text-indigo-900 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>{classCode.replace('-', '학년 ')}반 학생 모드</span>
+                    </span>
+                    <button
+                      onClick={() => setActiveTab("teacher")}
+                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                      title="선생님 전용 관리 모드로 전환"
+                    >
+                      교사 인증
+                    </button>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-[10px] uppercase tracking-wider font-extrabold text-indigo-600 block mb-1 flex items-center justify-between">
