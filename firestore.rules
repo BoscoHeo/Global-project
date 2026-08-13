@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /classroom_passcodes/{classCode} {
+      allow read, write: if true;
+    }
+    match /classroom_portfolios/{portfolioId} {
+      allow read, write: if true;
+    }
+    match /teacher_api_keys/{classCode} {
+      allow read, write: if true;
+    }
+    match /classroom_continents/{classCode} {
+      allow read, write: if true;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1055,6 +1055,17 @@ const checkContentQuality = (text: string): { isValid: boolean; reason?: string 
   return { isValid: true };
 };
 
+// Class-specific 4 assigned countries mapping for curriculum isolation
+const CLASS_SPECIFIC_4_COUNTRIES: Record<string, string[]> = {
+  "6-1": ["GH", "MG", "ZA", "EG"], // 1반: 아프리카 4개국 (가나, 마다가스카르, 남아공, 이집트)
+  "6-2": ["US", "CA", "MX", "JM"], // 2반: 북아메리카 4개국 (미국, 캐나다, 멕시코, 자메이카)
+  "6-3": ["BR", "AR", "CL", "VE"], // 3반: 남아메리카 4개국 (브라질, 아르헨티나, 칠레, 베네수엘라)
+  "6-4": ["NZ", "FJ", "PW", "WS"], // 4반: 오세아니아 4개국 (뉴질랜드, 피지, 팔라우, 사모아)
+  "6-5": ["KR", "IN", "JP", "VN"], // 5반: 아시아 4개국 (대한민국, 인도, 일본, 베트남)
+  "6-6": ["FR", "NO", "GB", "DE"], // 6반: 북&서유럽 4개국 (프랑스, 노르웨이, 영국, 독일)
+  "6-7": ["PT", "RU", "HU", "IT"]  // 7반: 동&남유럽 4개국 (포르투갈, 러시아, 헝가리, 이탈리아)
+};
+
 export default function App() {
   const [classCode, setClassCode] = useState<string>(() => {
     try {
@@ -1089,10 +1100,14 @@ export default function App() {
   };
 
   const handleCopyClassLink = (cCode: string) => {
+    if (!isTeacherUnlocked && cCode !== classCode) {
+      alert(`🔒 [학급 데이터 보안 격리]\n\n학생 모드에서는 자기 학급(${classCode})만 접속 가능합니다.\n\n타 학급(${cCode}) 링크로 이동하거나 공유하려면 교사 전용 비밀번호(8900)를 입력하여 선생님 인증을 완료해야 합니다.`);
+      return;
+    }
     const link = getShareUrlForClass(cCode);
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(link).then(() => {
-        alert(`📋 [${cCode}학급 전용 접속 링크]가 클립보드에 복사되었습니다!\n\n학생들에게 아래 링크를 전달해 주시면 3초 만에 ${cCode}학급 담당 국가들로 바로 자동 진입합니다:\n\n${link}`);
+        alert(`📋 [${cCode}학급 전용 접속 링크]가 클립보드에 복사되었습니다!\n\n학생들에게 아래 링크를 전달해 주시면 ${cCode}학급 담당 국가들로 바로 자동 진입합니다:\n\n${link}`);
       }).catch(() => {
         prompt(`[${cCode}학급 전용 접속 링크]를 복사하여 학생들에게 공유하세요:`, link);
       });
@@ -1135,8 +1150,8 @@ export default function App() {
       "6-3": "남아메리카 (South America)",
       "6-4": "오세아니아 (Oceania)",
       "6-5": "아시아 (Asia)",
-      "6-6": "유럽 (Europe)",
-      "6-7": "유럽 (Europe)"
+      "6-6": "북&서유럽 (Europe)",
+      "6-7": "동&남유럽 (Europe)"
     };
   });
 
@@ -1166,7 +1181,17 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         if (data.custom && Object.keys(data.custom).length > 0) {
-          setClassContinents(prev => ({ ...prev, ...data.custom }));
+          const cleaned = { ...data.custom };
+          // If 6-1 was incorrectly mapped to Europe, clean back to Africa
+          if (cleaned["6-1"] === "유럽" || cleaned["6-1"] === "유럽 (Europe)") {
+            cleaned["6-1"] = "아프리카 (Africa)";
+            fetch("/api/class-continent/save", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ classCode: "6-1", continent: "아프리카 (Africa)" })
+            }).catch(() => {});
+          }
+          setClassContinents(prev => ({ ...prev, ...cleaned }));
         }
       }
     } catch (e) {
@@ -1596,47 +1621,15 @@ export default function App() {
     const isEffectiveClassOnly = !isTeacherUnlocked || isClassOnlyMode;
 
     if (isEffectiveClassOnly) {
-      // First check if teacher explicitly set classContinents[classCode]
-      const assigned = classContinents[classCode];
-      if (assigned && assigned !== "전체") {
-        const assignedTerm = assigned.split(" ")[0].toLowerCase();
-        if (!country.continent.toLowerCase().includes(assignedTerm)) return false;
+      const isStandardClass = ["6-1", "6-2", "6-3", "6-4", "6-5", "6-6", "6-7"].includes(classCode);
+      if (isStandardClass && CLASS_SPECIFIC_4_COUNTRIES[classCode]) {
+        const targetCodes = CLASS_SPECIFIC_4_COUNTRIES[classCode];
+        if (!targetCodes.includes(country.code)) return false;
       } else {
-        // Default class mappings if not custom set
-        if (classCode === "6-1") {
-          // 1반: 아프리카 (가나, 마다가스카르, 남아공, 이집트)
-          if (!country.continent.toLowerCase().includes("아프리카") && !country.continent.toLowerCase().includes("africa")) return false;
-        } else if (classCode === "6-2") {
-          // 2반: 북아메리카
-          if (!country.continent.toLowerCase().includes("북아메리카") && !country.continent.toLowerCase().includes("north america")) return false;
-        } else if (classCode === "6-3") {
-          // 3반: 남아메리카 (브라질, 아르헨티나, 칠레, 베네수엘라)
-          if (!country.continent.toLowerCase().includes("남아메리카") && !country.continent.toLowerCase().includes("south america")) return false;
-        } else if (classCode === "6-4") {
-          // 4반: 오세아니아 (뉴질랜드, 피지, 팔라우, 사모아)
-          if (!country.continent.toLowerCase().includes("오세아니아") && !country.continent.toLowerCase().includes("oceania")) return false;
-        } else if (classCode === "6-5") {
-          // 5반: 아시아
-          if (!country.continent.toLowerCase().includes("아시아") && !country.continent.toLowerCase().includes("asia")) return false;
-        } else if (classCode === "6-6") {
-          // 6반: 북&서유럽 (프랑스, 노르웨이, 영국, 독일)
-          const westNorthCodes = ["FR", "NO", "GB", "DE"];
-          const isMatch = westNorthCodes.includes(country.code) || 
-            (country.continent.toLowerCase().includes("유럽") && !["PT", "RU", "HU", "IT"].includes(country.code));
-          if (!isMatch) return false;
-        } else if (classCode === "6-7") {
-          // 7반: 동&남유럽 (포르투갈, 러시아, 헝가리, 이탈리아)
-          const eastSouthCodes = ["PT", "RU", "HU", "IT"];
-          const isMatch = eastSouthCodes.includes(country.code) || 
-            (country.continent.toLowerCase().includes("유럽") && !["FR", "NO", "GB", "DE"].includes(country.code));
-          if (!isMatch) return false;
-        } else {
-          // Custom class code fallback
-          const assignedFallback = classContinents[classCode];
-          if (assignedFallback && assignedFallback !== "전체") {
-            const assignedTerm = assignedFallback.split(" ")[0].toLowerCase();
-            if (!country.continent.toLowerCase().includes(assignedTerm)) return false;
-          }
+        const assignedFallback = classContinents[classCode];
+        if (assignedFallback && assignedFallback !== "전체") {
+          const assignedTerm = assignedFallback.split(" ")[0].toLowerCase();
+          if (!country.continent.toLowerCase().includes(assignedTerm)) return false;
         }
       }
     } else {
@@ -4938,7 +4931,7 @@ ${clausesCombined}`
                     학급별(6-1, 6-2 등)로 분할 맡기로 한 대륙을 배정하세요. 해당 학급 학생이 접속하면 해당 대륙의 국가가 자동으로 우선 필터링됩니다.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
-                    {["6-1", "6-2", "6-3", "6-4", "6-5", "6-6"].map((cls) => (
+                    {["6-1", "6-2", "6-3", "6-4", "6-5", "6-6", "6-7"].map((cls) => (
                       <div key={cls} className="flex items-center justify-between bg-slate-50 border border-slate-200/80 rounded-lg p-2 text-xs">
                         <span className="font-black text-indigo-700 shrink-0">{cls} 학급</span>
                         <select
@@ -4948,7 +4941,8 @@ ${clausesCombined}`
                         >
                           <option value="전체">🌐 전체 대륙</option>
                           <option value="아시아 (Asia)">🌏 아시아</option>
-                          <option value="유럽 (Europe)">🏰 유럽</option>
+                          <option value="북&서유럽 (Europe)">🏰 북&서유럽</option>
+                          <option value="동&남유럽 (Europe)">🏛️ 동&남유럽</option>
                           <option value="아프리카 (Africa)">🏜️ 아프리카</option>
                           <option value="남아메리카 (South America)">💃 남아메리카</option>
                           <option value="북아메리카 (North America)">🗽 북아메리카</option>

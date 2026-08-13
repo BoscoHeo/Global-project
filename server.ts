@@ -521,8 +521,8 @@ const classroomContinents = new Map<string, string>([
   ["6-3", "남아메리카 (South America)"],
   ["6-4", "오세아니아 (Oceania)"],
   ["6-5", "아시아 (Asia)"],
-  ["6-6", "유럽 (Europe)"],
-  ["6-7", "유럽 (Europe)"]
+  ["6-6", "북&서유럽 (Europe)"],
+  ["6-7", "동&남유럽 (Europe)"]
 ]);
 
 // Helper to sync all database records from Firestore into our local cache on startup
