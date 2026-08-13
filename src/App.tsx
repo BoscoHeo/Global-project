@@ -22,7 +22,8 @@ import {
   Layers, 
   Search, 
   Heart, 
-  LogOut 
+  LogOut,
+  Share2 
 } from "lucide-react";
 import { EvaluationLevel, TopicType, StoryboardScene, CountryInfo, StampData, GroupMember, OfflineBoothPlan } from "./types";
 
@@ -735,6 +736,296 @@ const SEEDED_COUNTRIES: CountryInfo[] = [
         hint: "💡 힌트: 열대 열매 및 바나나와 함께 곁들여 먹는 파푸아뉴기니 전통 녹말 주식입니다."
       }
     ]
+  },
+  {
+    code: "GH",
+    name: "가나 (Ghana)",
+    continent: "아프리카 (Africa)",
+    flag: "🇬🇭",
+    description: "서아프리카 골드코스트의 중심지, 세계적인 카카오 생산지이자 정겨운 환대의 전통 문화를 지닌 나라입니다.",
+    highlights: {
+      food: "카카오 콩과 함께 매콤한 토마토 야채 수프에 다진 얌 떡을 곁들이는 '푸푸(Fufu)'와 '졸로프 라이스'.",
+      greeting: "오른손 손가락을 상대방과 부딪히며 소리를 내는 가나 특유의 활기찬 손가락 '스냅 악수' 인사.",
+      costume: "왕족과 부족 원로들이 귀한 행사 때 어깨에 둘러 착용하는 화려한 기하학적 직물 '켄테(Kente)'.",
+      festival: "부족의 조상을 기리고 카카오 및 햇곡식 수확에 감사하며 열리는 '아보아키어(Aboakyer) 축제'."
+    },
+    quiz: [
+      {
+        id: "gh-q1",
+        question: "가나에서 귀한 손님을 맞이하거나 기쁜 행사 때 어깨에 둘러 입는 전통 화려한 기하학적 직물의 이름은?",
+        options: ["켄테(Kente)", "한복", "기모노", "사리"],
+        correctIndex: 0,
+        hint: "💡 힌트: 서아프리카 가나의 전통 왕족 직물로 알록달록한 패턴이 특징입니다."
+      },
+      {
+        id: "gh-q2",
+        question: "세계적인 초콜릿의 주요 원료로, 가나의 주요 수출품이자 대표적인 농작물은?",
+        options: ["카카오(Cacao)", "커피", "설탕", "올리브"],
+        correctIndex: 0,
+        hint: "💡 힌트: 초콜릿을 만드는 달콤한 콩으로 가나 농업의 대표작물입니다."
+      }
+    ]
+  },
+  {
+    code: "MG",
+    name: "마다가스카르 (Madagascar)",
+    continent: "아프리카 (Africa)",
+    flag: "🇲🇬",
+    description: "아프리카 동쪽 인도양의 신비로운 섬, 바오밥나무와 여우원숭이가 서식하는 대자연 생태의 보고입니다.",
+    highlights: {
+      food: "기름진 쇠고기 수프와 나물을 밥에 올려 먹는 마다가스카르 전통 주식 '롬바바(Romazava)'.",
+      greeting: "손을 가슴에 대고 '살라마(Salama!)'라고 따뜻하게 건네는 마다가스카르 안부 인사.",
+      costume: "어깨와 몸에 천을 둘러 품위 있게 연출하는 면 직물 전통 의상 '람바(Lamba)'.",
+      festival: "조상과의 연대감과 가문의 우애를 다지며 전통 음악에 맞춰 춤추는 '파마디하나(Famadihana) 축제'."
+    },
+    quiz: [
+      {
+        id: "mg-q1",
+        question: "마다가스카르에서 손님을 만나 반갑게 인사를 건넬 때 사용하는 정겨운 전통 인사는?",
+        options: ["살라마(Salama!)", "봉주르", "나마스테", "알로하"],
+        correctIndex: 0,
+        hint: "💡 힌트: 마다가스카르 공항이나 길거리에서 나누는 안부 인사입니다."
+      },
+      {
+        id: "mg-q2",
+        question: "마다가스카르의 대표적인 자연 상징물로, 거대한 줄기와 가지가 마치 뿌리처럼 하늘을 향해 자라는 나무는?",
+        options: ["바오밥나무", "자작나무", "단풍나무", "야자수"],
+        correctIndex: 0,
+        hint: "💡 힌트: '어린 왕자' 소설에도 등장하는 마다가스카르의 거대 나무입니다."
+      }
+    ]
+  },
+  {
+    code: "VE",
+    name: "베네수엘라 (Venezuela)",
+    continent: "남아메리카 (South America)",
+    flag: "🇻🇪",
+    description: "세계 최대 높이의 앙헬 폭포와 카리브해의 드넓은 해안, 열정적인 음악이 가득한 남아메리카 국가입니다.",
+    highlights: {
+      food: "옥수수가루 빵을 반으로 갈라 고기와 치즈, 아보카도를 채워 먹는 전통 국민 음식 '아레파(Arepa)'.",
+      greeting: "손을 마주잡고 밝은 미소와 함께 '홀라, 코모 에스타스(Hola, ¿cómo estás?)'라고 인사합니다.",
+      costume: "화려한 주름 장식 드레스와 남성들의 고품격 정장 '리키리키(Liquiliqui)'.",
+      festival: "카라카스와 온 마을을 열정적인 음악과 퍼레이드로 수놓는 '베네수엘라 카니발'."
+    },
+    quiz: [
+      {
+        id: "ve-q1",
+        question: "베네수엘라에서 아침과 저녁 식사로 즐겨 먹는, 옥수수가루 빵 속에 치즈나 고기를 넣은 전통 음식은?",
+        options: ["아레파(Arepa)", "타코", "초밥", "바게트"],
+        correctIndex: 0,
+        hint: "💡 힌트: 옥수수 둥근 빵에 재료를 채워 구워내는 베네수엘라 주식입니다."
+      },
+      {
+        id: "ve-q2",
+        question: "베네수엘라에 위치한, 낙차 979m로 세계에서 가장 높이서 떨어지는 폭포의 이름은?",
+        options: ["앙헬 폭포(Angel Falls)", "나이아가라 폭포", "빅토리아 폭포", "이구아수 폭포"],
+        correctIndex: 0,
+        hint: "💡 힌트: 천사의 폭포라는 뜻을 가진 세계 최고 높이의 폭포입니다."
+      }
+    ]
+  },
+  {
+    code: "PW",
+    name: "팔라우 (Palau)",
+    continent: "오세아니아 (Oceania)",
+    flag: "🇵🇼",
+    description: "태평양의 에메랄드빛 해양 낙원, 수백 개의 버섯 모양 락 아일랜드와 해양 환경 보호의 선구국입니다.",
+    highlights: {
+      food: "신선한 코코넛 밀크와 열대 해산물, 타로 토란으로 조리하는 친환경 해양 식단.",
+      greeting: "상대방을 향해 따뜻한 눈빛을 나누며 '알리이(Alii!)'라고 기분 좋게 인사를 건넵니다.",
+      costume: "자연 나뭇잎과 조개껍데기 공예품, 가볍고 시원한 랩스커트 형태의 섬 의복.",
+      festival: "지구 환경과 바다 생태계를 보호하고 전통 카누 노젓기 경기를 펼치는 '팔라우 환경 카누 축제'."
+    },
+    quiz: [
+      {
+        id: "pw-q1",
+        question: "팔라우 섬에 도착한 나그네와 이웃들에게 건네는 평화롭고 친근한 인사말은?",
+        options: ["알리이(Alii!)", "알로하", "불라", "니하오"],
+        correctIndex: 0,
+        hint: "💡 힌트: 팔라우 섬 사람들이 나누는 따뜻한 미소의 인사입니다."
+      },
+      {
+        id: "pw-q2",
+        question: "팔라우에서 바다 생태계를 보호하기 위해 여권에 도장을 찍어주는 환경 보전 서약의 명칭은?",
+        options: ["팔라우 서약(Palau Pledge)", "지구 헌장", "환경 조약", "해양 선언"],
+        correctIndex: 0,
+        hint: "💡 힌트: 환경 보전을 약속하며 입국 여권에 서명하는 세계 최초의 환경 도장입니다."
+      }
+    ]
+  },
+  {
+    code: "WS",
+    name: "사모아 (Samoa)",
+    continent: "오세아니아 (Oceania)",
+    flag: "🇼🇸",
+    description: "남태평양 폴리네시아 문화의 중심지, 강인한 타투 예술과 공동체 화합 '파아 사모아' 정신의 나라입니다.",
+    highlights: {
+      food: "코코넛 잎에 다진 고기와 타로 잎을 싸서 전통 코코넛 밀크에 쪄내는 '팔루사미(Palusami)'.",
+      greeting: "가슴에 손을 대거나 굳건히 손을 잡으며 '탈로파(Talofa!)'라고 반갑게 외칩니다.",
+      costume: "사모아 남녀가 기품있게 둘러 입는 전통 패턴 하의 '라발라바(Lavalava)'.",
+      festival: "사모아 최고의 민속 춤꾼들과 칼 불쇼 전사들이 실력을 겨루는 '테우일라 축제(Teuila Festival)'."
+    },
+    quiz: [
+      {
+        id: "ws-q1",
+        question: "사모아인들이 서로를 만나 반갑게 환영하며 외치는 대표적인 전통 인사말은?",
+        options: ["탈로파(Talofa!)", "불라", "홍이", "카바"],
+        correctIndex: 0,
+        hint: "💡 힌트: 남태평양 사모아섬 사람들의 정겨운 환영 인사말입니다."
+      },
+      {
+        id: "ws-q2",
+        question: "사모아 전통 요리로, 타로 잎과 코코넛 크림을 싸서 땅속 화덕에서 고소하게 구워내는 음식은?",
+        options: ["팔루사미(Palusami)", "미트파이", "항기", "저크치킨"],
+        correctIndex: 0,
+        hint: "💡 힌트: 코코넛 밀크 풍미가 일품인 사모아 대표 전통 찜 요리입니다."
+      }
+    ]
+  },
+  {
+    code: "NO",
+    name: "노르웨이 (Norway)",
+    continent: "유럽 (Europe)",
+    flag: "🇳🇴",
+    description: "웅장한 피요르드 해안과 바이킹의 역사, 오로라가 북극 하늘을 수놓는 북유럽 복지국가입니다.",
+    highlights: {
+      food: "신선한 연어 스테이크와 염장 대구 요리 '루테피스크(Lutefisk)', 호밀 빵.",
+      greeting: "눈을 마주치며 미소짓고 '헤이(Hei!)' 또는 '헤이 헤이' 하고 정겹게 인사합니다.",
+      costume: "각 지역의 고유 자수와 은제 장식으로 꾸민 노르웨이 대표 전통 의상 '부나드(Bunad)'.",
+      festival: "5월 17일 국경일에 온 국민이 전통 의상 부나드를 입고 거리를 행진하는 '노르웨이 헌법 제정일 축제'."
+    },
+    quiz: [
+      {
+        id: "no-q1",
+        question: "노르웨이 사람들이 국경일이나 경사에 입는, 각 지역 자수와 은 장식이 돋보이는 전통 의상 이름은?",
+        options: ["부나드(Bunad)", "킬트", "한복", "사리"],
+        correctIndex: 0,
+        hint: "💡 힌트: 노르웨이 헌법 제정일 행사 때 입는 화려한 민속 의복입니다."
+      },
+      {
+        id: "no-q2",
+        question: "빙하가 깎아 만든 노르웨이의 웅장한 침식 골짜기 해안 지형의 명칭은?",
+        options: ["피요르드(Fjord)", "사막", "화산", "분지"],
+        correctIndex: 0,
+        hint: "💡 힌트: 북유럽 해안의 유네스코 자연유산 골짜기입니다."
+      }
+    ]
+  },
+  {
+    code: "DE",
+    name: "독일 (Germany)",
+    continent: "유럽 (Europe)",
+    flag: "🇩🇪",
+    description: "철학과 클래식 음악, 정교한 자동차 공학 및 중세 성과 라인강이 흐르는 유럽의 중심국입니다.",
+    highlights: {
+      food: "독일식 족발 요리 '학세(Haxn)'와 다양한 소시지 '브라트부르스트', 양배추 절임 '샤우어크라우트'.",
+      greeting: "손을 힘있게 잡으며 '구텐 타크(Guten Tag!)'라고 격식 있고 정중히 인사합니다.",
+      costume: "바이에른 지방의 전통 가죽 바지 '레더호젠(Lederhosen)'과 드레스 '디른들(Dirndl)'.",
+      festival: "뮌헨에서 매년 가을 세계 각국의 이웃들이 모여 전통 관악 연주를 즐기는 '옥토버페스트'."
+    },
+    quiz: [
+      {
+        id: "de-q1",
+        question: "독일 바이에른 지방의 전통 가죽 바지 형태 의상의 이름은?",
+        options: ["레더호젠(Lederhosen)", "청바지", "튜닉", "사롱"],
+        correctIndex: 0,
+        hint: "💡 힌트: 독일 남부 바이에른 주민들이 축제 때 입는 짧은 가죽 멜빵 바지입니다."
+      },
+      {
+        id: "de-q2",
+        question: "독일 뮌헨에서 가을마다 열리는, 세계적인 전통 민속 관악 축제의 명칭은?",
+        options: ["옥토버페스트(Oktoberfest)", "리우 카니발", "토마토 축제", "시드니 불꽃축제"],
+        correctIndex: 0,
+        hint: "💡 힌트: 10월을 뜻하는 독일 뮌헨의 대표 문화 축제입니다."
+      }
+    ]
+  },
+  {
+    code: "PT",
+    name: "포르투갈 (Portugal)",
+    continent: "유럽 (Europe)",
+    flag: "🇵🇹",
+    description: "대항해 시대의 해양 관문, 파도 소리와 영혼을 울리는 음악 파두(Fado)가 흐르는 아름다운 남유럽국입니다.",
+    highlights: {
+      food: "바삭한 타르트지 안에 달콤한 에그 크림을 채워 구운 '에그타르트(Pastel de Nata)'와 '바칼라우'.",
+      greeting: "반갑게 악수를 나누거나 '올라(Olá!)' 하고 다정하게 인사합니다.",
+      costume: "화려한 자수 앞치마와 붉은 치마, 해양 선원들의 정겨운 베레모 장식 의상.",
+      festival: "리스본 거리 전체가 정향 향기와 정통 파두 음악으로 가득 차는 '성 안토니오 축제'."
+    },
+    quiz: [
+      {
+        id: "pt-q1",
+        question: "포르투갈의 수녀원에서 처음 탄생하여 전 세계적으로 사랑받는 바삭하고 달콤한 디저트는?",
+        options: ["에그타르트(Pastel de Nata)", "마카롱", "츄러스", "크로플"],
+        correctIndex: 0,
+        hint: "💡 힌트: 리스본 벨렝빵집에서 유명해진 계란 크림 디저트입니다."
+      },
+      {
+        id: "pt-q2",
+        question: "포르투갈의 바다와 삶의 희로애락을 담아 기타 반주에 맞춰 부르는 영혼의 전통 민요 장르는?",
+        options: ["파두(Fado)", "레게", "요델", "플라멩코"],
+        correctIndex: 0,
+        hint: "💡 힌트: 포르투갈 사람들의 한과 그리움을 노래하는 유네스코 무형유산 음악입니다."
+      }
+    ]
+  },
+  {
+    code: "RU",
+    name: "러시아 (Russia)",
+    continent: "유럽 (Europe)",
+    flag: "🇷🇺",
+    description: "유라시아 대륙에 걸쳐 있는 광대한 대지, 차이콥스키의 발레 음악과 양파 모양 돔 성당의 나라입니다.",
+    highlights: {
+      food: "붉은 비트 채소 수프 '보르시(Borscht)'와 전통 숯불 꼬치구이 '샤슬릭', 메밀 죽 '카샤'.",
+      greeting: "눈을 보고 굳건하게 악수를 나누며 '즈드라스뜨부이떼(Zdravstvuyte)'라고 존중을 담아 인사합니다.",
+      costume: "추운 날씨를 이기기 위한 모피 모자 '우샨카(Ushanka)'와 여성들의 둥근 드레스 '사라판'.",
+      festival: "긴 겨울이 끝나고 봄을 맞이하며 동그란 팬케이크(블리니)를 구워 나누는 '마슬레니차 축제'."
+    },
+    quiz: [
+      {
+        id: "ru-q1",
+        question: "러시아에서 추운 겨울철 귀와 머리를 따뜻하게 감싸기 위해 쓰는 모피 모자의 이름은?",
+        options: ["우샨카(Ushanka)", "카우보이 모자", "터번", "부시헷"],
+        correctIndex: 0,
+        hint: "💡 힌트: 귀마개가 달린 러시아의 전통 모피 털모자입니다."
+      },
+      {
+        id: "ru-q2",
+        question: "러시아에서 붉은 비트 채소를 고기 및 야채와 함께 끓여내는 전통 스튜 요리의 명칭은?",
+        options: ["보르시(Borscht)", "타진", "파스타", "커리"],
+        correctIndex: 0,
+        hint: "💡 힌트: 비트 덕분에 영롱한 보랏빛/붉은빛을 띠는 동유럽 수프입니다."
+      }
+    ]
+  },
+  {
+    code: "HU",
+    name: "헝가리 (Hungary)",
+    continent: "유럽 (Europe)",
+    flag: "🇭🇺",
+    description: "다뉴브강의 장미 부다페스트, 매콤한 파프리카 향신료와 온천 문화가 발달한 동유럽의 보석입니다.",
+    highlights: {
+      food: "소고기 외 채소에 빨간 파프리카 가루를 듬뿍 넣어 얼큰하게 끓인 스튜 '굴라시(Goulash)'.",
+      greeting: "손을 잡거나 '시어(Szia!)' 하고 친근하게 안부를 물으며 인사를 건냅니다.",
+      costume: "꽃 자수가 촘촘히 놓인 전통 조끼와 붉은 부츠, 화려한 헤어밴드 의복.",
+      festival: "모하치 마을에서 탈을 쓰고 겨울의 악귀를 쫓으며 봄을 맞이하는 '부쇼야라시(Busójárás) 축제'."
+    },
+    quiz: [
+      {
+        id: "hu-q1",
+        question: "헝가리에서 파프리카 가루와 소고기, 야채를 넣어 진하게 끓여내는 대표적인 전통 스튜는?",
+        options: ["굴라시(Goulash)", "빠에야", "포토푀", "쌀국수"],
+        correctIndex: 0,
+        hint: "💡 힌트: 파프리카 풍미의 헝가리식 소고기 스튜입니다."
+      },
+      {
+        id: "hu-q2",
+        question: "헝가리 모하치 지역에서 독특한 탈을 쓰고 악귀를 쫓는 전통 유네스코 문화 축제는?",
+        options: ["부쇼야라시(Busójárás)", "옥토버페스트", "토마토 축제", "카니발"],
+        correctIndex: 0,
+        hint: "💡 힌트: 무서운 목각 탈을 쓰고 봄을 환영하는 헝가리 민속 축제입니다."
+      }
+    ]
   }
 ];
 
@@ -765,11 +1056,70 @@ const checkContentQuality = (text: string): { isValid: boolean; reason?: string 
 };
 
 export default function App() {
-  const [classCode, setClassCode] = useState<string>("6-1");
+  const [classCode, setClassCode] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlClass = params.get("class") || params.get("classCode");
+      if (urlClass && ["6-1", "6-2", "6-3", "6-4", "6-5", "6-6", "6-7"].includes(urlClass)) {
+        return urlClass;
+      }
+    } catch (e) {}
+    return "6-1";
+  });
+
+  // Sync current classCode to URL search params without reloading
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("class") !== classCode) {
+        url.searchParams.set("class", classCode);
+        window.history.replaceState(null, "", url.toString());
+      }
+    } catch (e) {}
+  }, [classCode]);
+
+  const getShareUrlForClass = (cCode: string) => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("class", cCode);
+      return url.toString();
+    } catch (e) {
+      return `${window.location.origin}${window.location.pathname}?class=${cCode}`;
+    }
+  };
+
+  const handleCopyClassLink = (cCode: string) => {
+    const link = getShareUrlForClass(cCode);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(() => {
+        alert(`📋 [${cCode}학급 전용 접속 링크]가 클립보드에 복사되었습니다!\n\n학생들에게 아래 링크를 전달해 주시면 3초 만에 ${cCode}학급 담당 국가들로 바로 자동 진입합니다:\n\n${link}`);
+      }).catch(() => {
+        prompt(`[${cCode}학급 전용 접속 링크]를 복사하여 학생들에게 공유하세요:`, link);
+      });
+    } else {
+      prompt(`[${cCode}학급 전용 접속 링크]를 복사하여 학생들에게 공유하세요:`, link);
+    }
+  };
   const [activeTab, setActiveTab] = useState<string>("curriculum");
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [countries, setCountries] = useState<CountryInfo[]>(SEEDED_COUNTRIES);
-  const [selectedCountry, setSelectedCountry] = useState<CountryInfo>(SEEDED_COUNTRIES[0]);
+  const [countries, setCountries] = useState<CountryInfo[]>(() => {
+    try {
+      const savedCustom = localStorage.getItem("custom_countries");
+      if (savedCustom) {
+        const parsed = JSON.parse(savedCustom);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Merge custom saved countries with seeded countries without duplicates
+          const seededCodes = new Set(SEEDED_COUNTRIES.map(c => c.code));
+          const customFiltered = parsed.filter((c: CountryInfo) => !seededCodes.has(c.code));
+          return [...customFiltered, ...SEEDED_COUNTRIES];
+        }
+      }
+    } catch (e) {
+      console.error("Failed to restore custom countries:", e);
+    }
+    return SEEDED_COUNTRIES;
+  });
+  const [selectedCountry, setSelectedCountry] = useState<CountryInfo>(() => SEEDED_COUNTRIES[0]);
   const [generatingCountryName, setGeneratingCountryName] = useState<string>("");
   const [isGeneratingCountry, setIsGeneratingCountry] = useState<boolean>(false);
 
@@ -780,16 +1130,34 @@ export default function App() {
       if (saved) return JSON.parse(saved);
     } catch (e) {}
     return {
-      "6-1": "아시아 (Asia)",
-      "6-2": "유럽 (Europe)",
-      "6-3": "아프리카 (Africa)",
-      "6-4": "남아메리카 (South America)",
-      "6-5": "북아메리카 (North America)",
-      "6-6": "오세아니아 (Oceania)"
+      "6-1": "아프리카 (Africa)",
+      "6-2": "북아메리카 (North America)",
+      "6-3": "남아메리카 (South America)",
+      "6-4": "오세아니아 (Oceania)",
+      "6-5": "아시아 (Asia)",
+      "6-6": "유럽 (Europe)",
+      "6-7": "유럽 (Europe)"
     };
   });
 
   const [selectedContinentFilter, setSelectedContinentFilter] = useState<string>("전체");
+  const [showClassAllocationModal, setShowClassAllocationModal] = useState<boolean>(false);
+
+  // Dedicated Class-Only Access Mode Toggle (Default: true)
+  const [isClassOnlyMode, setIsClassOnlyMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("is_class_only_mode");
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("is_class_only_mode", JSON.stringify(isClassOnlyMode));
+    } catch (e) {}
+  }, [isClassOnlyMode]);
 
   // Fetch class assigned continents from backend
   const fetchClassContinents = async () => {
@@ -1231,21 +1599,63 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Filter countries by continent assignment/selection AND search term
+  // Filter countries by class dedicated assignment, continent selection AND search term
   const filteredCountries = countries.filter(country => {
-    const continentTerm = selectedContinentFilter.split(" ")[0].toLowerCase();
-    const matchesContinent = 
-      selectedContinentFilter === "전체" || 
-      selectedContinentFilter === "전체 (모든 대륙)" ||
-      country.continent.toLowerCase().includes(continentTerm);
+    // 1. Strict Class-Only Access Filter (when isClassOnlyMode is ON)
+    if (isClassOnlyMode) {
+      if (classCode === "6-1") {
+        // 1반: 아프리카 (가나, 마다가스카르, 남아공, 이집트)
+        if (!country.continent.toLowerCase().includes("아프리카") && !country.continent.toLowerCase().includes("africa")) return false;
+      } else if (classCode === "6-2") {
+        // 2반: 북아메리카
+        if (!country.continent.toLowerCase().includes("북아메리카") && !country.continent.toLowerCase().includes("north america")) return false;
+      } else if (classCode === "6-3") {
+        // 3반: 남아메리카 (브라질, 아르헨티나, 칠레, 베네수엘라)
+        if (!country.continent.toLowerCase().includes("남아메리카") && !country.continent.toLowerCase().includes("south america")) return false;
+      } else if (classCode === "6-4") {
+        // 4반: 오세아니아 (뉴질랜드, 피지, 팔라우, 사모아)
+        if (!country.continent.toLowerCase().includes("오세아니아") && !country.continent.toLowerCase().includes("oceania")) return false;
+      } else if (classCode === "6-5") {
+        // 5반: 아시아
+        if (!country.continent.toLowerCase().includes("아시아") && !country.continent.toLowerCase().includes("asia")) return false;
+      } else if (classCode === "6-6") {
+        // 6반: 북&서유럽 (프랑스, 노르웨이, 영국, 독일)
+        const westNorthCodes = ["FR", "NO", "GB", "DE"];
+        const isMatch = westNorthCodes.includes(country.code) || 
+          (country.continent.toLowerCase().includes("유럽") && !["PT", "RU", "HU", "IT"].includes(country.code));
+        if (!isMatch) return false;
+      } else if (classCode === "6-7") {
+        // 7반: 동&남유럽 (포르투갈, 러시아, 헝가리, 이탈리아)
+        const eastSouthCodes = ["PT", "RU", "HU", "IT"];
+        const isMatch = eastSouthCodes.includes(country.code) || 
+          (country.continent.toLowerCase().includes("유럽") && !["FR", "NO", "GB", "DE"].includes(country.code));
+        if (!isMatch) return false;
+      } else {
+        // Custom class code fallback
+        const assigned = classContinents[classCode];
+        if (assigned && assigned !== "전체") {
+          const assignedTerm = assigned.split(" ")[0].toLowerCase();
+          if (!country.continent.toLowerCase().includes(assignedTerm)) return false;
+        }
+      }
+    } else {
+      // 2. Standard Continent Filter Tab (when Class-Only Mode is OFF)
+      const continentTerm = selectedContinentFilter.split(" ")[0].toLowerCase();
+      const matchesContinent = 
+        selectedContinentFilter === "전체" || 
+        selectedContinentFilter === "전체 (모든 대륙)" ||
+        country.continent.toLowerCase().includes(continentTerm);
+      if (!matchesContinent) return false;
+    }
 
+    // 3. Search Term Filter
     const matchesSearch = 
       !searchTerm.trim() ||
       country.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       country.continent.toLowerCase().includes(searchTerm.toLowerCase()) ||
       country.description.toLowerCase().includes(searchTerm.toLowerCase());
 
-    return matchesContinent && matchesSearch;
+    return matchesSearch;
   });
 
   // Keep selectedCountry inside filteredCountries if available
@@ -1256,7 +1666,7 @@ export default function App() {
         setSelectedCountry(filteredCountries[0]);
       }
     }
-  }, [selectedContinentFilter, classCode, countries]);
+  }, [selectedContinentFilter, classCode, countries, isClassOnlyMode]);
 
   // Add group member (Max 6)
   const handleAddMember = () => {
@@ -1756,6 +2166,74 @@ ${clausesCombined}`
     }
   };
 
+  // AI Dynamic Country Generator Handler
+  const handleGenerateAiCountry = async () => {
+    const rawInput = generatingCountryName.trim();
+    if (!rawInput) {
+      alert("추가할 국가 이름을 입력해 주세요!");
+      return;
+    }
+    setIsGeneratingCountry(true);
+    try {
+      const res = await fetch("/api/ai/generate-country", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "x-gemini-api-key": userApiKey,
+          "x-class-code": classCode
+        },
+        body: JSON.stringify({ countryName: rawInput })
+      });
+      if (!res.ok) throw new Error("API call failed");
+      const newCountry: CountryInfo = await res.json();
+
+      // Check if country already exists in state
+      const inputClean = rawInput.toLowerCase();
+      const existingCountry = countries.find(c => 
+        c.name.toLowerCase().includes(inputClean) ||
+        (newCountry.code && c.code.toLowerCase() === newCountry.code.toLowerCase())
+      );
+
+      if (existingCountry) {
+        setSelectedContinentFilter("전체");
+        setSearchTerm("");
+        setSelectedCountry(existingCountry);
+        setGeneratingCountryName("");
+        alert(`ℹ️ [${existingCountry.name}] 국가가 이미 탐색 목록에 존재하여 해당 국가로 화면을 자동 이동시켰습니다.`);
+        return;
+      }
+
+      // Ensure unique country code
+      if (countries.some(c => c.code === newCountry.code)) {
+        newCountry.code = `${newCountry.code}_${Date.now().toString(36).slice(-4)}`;
+      }
+
+      const updated = [newCountry, ...countries];
+      setCountries(updated);
+
+      // Persist in localStorage so custom countries survive reloads
+      try {
+        const savedCustom = JSON.parse(localStorage.getItem("custom_countries") || "[]");
+        localStorage.setItem("custom_countries", JSON.stringify([newCountry, ...savedCustom]));
+      } catch (e) {
+        console.error("Failed to save custom country to localStorage:", e);
+      }
+
+      // Reset filters so the new country is GUARANTEED to be visible in the UI
+      setSelectedContinentFilter("전체");
+      setSearchTerm("");
+      setSelectedCountry(newCountry);
+      setGeneratingCountryName("");
+
+      alert(`🎉 실시간 탐색 성공! [${newCountry.name}]의 6학년 지리학 수준 문화 피드 및 퀴즈가 성공적으로 추가되어 목록 상단에 바로 표시됩니다.`);
+    } catch (err) {
+      console.error(err);
+      alert("AI 국가 정보 검색 중 문제가 발생했습니다. 입력한 국가명을 다시 확인해 주십시오.");
+    } finally {
+      setIsGeneratingCountry(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-[#F8FAFC] text-slate-800 font-sans antialiased selection:bg-indigo-100">
       
@@ -1892,13 +2370,35 @@ ${clausesCombined}`
             <div className="space-y-2 mb-3">
               <div>
                 <label className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 block mb-1">🏫 소속 학급/교실 코드</label>
-                <input 
-                  type="text" 
-                  value={classCode}
-                  onChange={(e) => setClassCode(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-black text-indigo-700 bg-indigo-50/15 focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:bg-white"
-                  placeholder="예: 6-1"
-                />
+                <div className="flex gap-1.5">
+                  <select 
+                    value={classCode}
+                    onChange={(e) => setClassCode(e.target.value)}
+                    className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-black text-indigo-700 bg-indigo-50/15 focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:bg-white cursor-pointer"
+                  >
+                    <option value="6-1">6학년 1반 (6-1)</option>
+                    <option value="6-2">6학년 2반 (6-2)</option>
+                    <option value="6-3">6학년 3반 (6-3)</option>
+                    <option value="6-4">6학년 4반 (6-4)</option>
+                    <option value="6-5">6학년 5반 (6-5)</option>
+                    <option value="6-6">6학년 6반 (6-6)</option>
+                    <option value="6-7">6학년 7반 (6-7)</option>
+                  </select>
+                  <button
+                    onClick={() => handleCopyClassLink(classCode)}
+                    className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs shrink-0"
+                    title={`${classCode}학급 전용 접속 URL 링크 복사`}
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>공유</span>
+                  </button>
+                </div>
+                <button
+                  onClick={() => handleCopyClassLink(classCode)}
+                  className="w-full mt-1.5 py-1 px-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200/80 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>🔗 {classCode}학급 학생 배포용 링크 복사</span>
+                </button>
               </div>
               <div>
                 <label className="text-[10px] uppercase tracking-wider font-extrabold text-indigo-600 block mb-1 flex items-center justify-between">
@@ -1918,6 +2418,26 @@ ${clausesCombined}`
                   <option value="북아메리카 (North America)">🗽 북아메리카 (North America)</option>
                   <option value="오세아니아 (Oceania)">🦘 오세아니아 (Oceania)</option>
                 </select>
+
+                <button
+                  onClick={() => setIsClassOnlyMode(!isClassOnlyMode)}
+                  className={`w-full mt-2 py-1.5 px-2.5 rounded-lg text-[10.5px] font-black transition flex items-center justify-between cursor-pointer border ${
+                    isClassOnlyMode
+                      ? "bg-amber-50 border-amber-300 text-amber-900 shadow-2xs"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                  title="자기 학급에 배정된 대륙/국가만 접속 허용할지 전체 국가 탐구를 허용할지 설정합니다"
+                >
+                  <span className="flex items-center gap-1">
+                    <span>{isClassOnlyMode ? "🔒" : "🌐"}</span>
+                    <span>학급 배정 국가만 접속</span>
+                  </span>
+                  <span className={`text-[9.5px] px-1.5 py-0.5 rounded font-black ${
+                    isClassOnlyMode ? "bg-amber-500 text-white" : "bg-slate-200 text-slate-600"
+                  }`}>
+                    {isClassOnlyMode ? "ON" : "OFF"}
+                  </span>
+                </button>
               </div>
               <div>
                 <label className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 block mb-1">👥 실천 탐구 모둠명</label>
@@ -2224,76 +2744,15 @@ ${clausesCombined}`
                       onChange={(e) => setGeneratingCountryName(e.target.value)}
                       disabled={isGeneratingCountry}
                       className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-700 w-36 placeholder:text-slate-350 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
-                      onKeyDown={async (e) => {
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
-                          if (!generatingCountryName.trim()) return;
-                          setIsGeneratingCountry(true);
-                          try {
-                            const res = await fetch("/api/ai/generate-country", {
-                              method: "POST",
-                              headers: { 
-                                "Content-Type": "application/json",
-                                "x-gemini-api-key": userApiKey,
-                                "x-class-code": classCode
-                              },
-                              body: JSON.stringify({ countryName: generatingCountryName.trim() })
-                            });
-                            if (!res.ok) throw new Error("API call failed");
-                            const newCountry = await res.json();
-                            if (countries.some(c => c.code === newCountry.code || c.name.toLowerCase().includes(newCountry.name.split(" ")[0].toLowerCase()))) {
-                              alert("이미 아카이브에 존재하는 국가입니다!");
-                            } else {
-                              const updated = [newCountry, ...countries];
-                              setCountries(updated);
-                              setSelectedCountry(newCountry);
-                              setGeneratingCountryName("");
-                              alert(`🎉 실시간 탐색 성공! [${newCountry.name}]의 6학년 지리학 수준 문화 피드 및 퀴즈가 AI를 통해 성공적으로 입배열되었습니다.`);
-                            }
-                          } catch (err) {
-                            console.error(err);
-                            alert("AI 국가 정보 검색에 실패하였습니다. 네트워크 상태나 API 설정을 확인해 주십시오.");
-                          } finally {
-                            setIsGeneratingCountry(false);
-                          }
+                          handleGenerateAiCountry();
                         }
                       }}
                     />
                     <button
-                      onClick={async () => {
-                        if (!generatingCountryName.trim()) {
-                          alert("추가할 국가 이름을 입력해 주세요!");
-                          return;
-                        }
-                        setIsGeneratingCountry(true);
-                        try {
-                          const res = await fetch("/api/ai/generate-country", {
-                            method: "POST",
-                            headers: { 
-                              "Content-Type": "application/json",
-                              "x-gemini-api-key": userApiKey,
-                              "x-class-code": classCode
-                            },
-                            body: JSON.stringify({ countryName: generatingCountryName.trim() })
-                          });
-                          if (!res.ok) throw new Error("API call failed");
-                          const newCountry = await res.json();
-                          if (countries.some(c => c.code === newCountry.code || c.name.toLowerCase().includes(newCountry.name.split(" ")[0].toLowerCase()))) {
-                            alert("이미 아카이브에 존재하는 국가입니다!");
-                          } else {
-                            const updated = [newCountry, ...countries];
-                            setCountries(updated);
-                            setSelectedCountry(newCountry);
-                            setGeneratingCountryName("");
-                            alert(`🎉 실시간 탐색 성공! [${newCountry.name}]의 6학년 지리학 수준 문화 피드 및 퀴즈가 AI를 통해 성공적으로 입배열되었습니다.`);
-                          }
-                        } catch (err) {
-                          console.error(err);
-                          alert("AI 국가 정보 검색에 실패하였습니다. 네트워크 상태나 API 설정을 확인해 주십시오.");
-                        } finally {
-                          setIsGeneratingCountry(false);
-                        }
-                      }}
+                      onClick={handleGenerateAiCountry}
                       disabled={isGeneratingCountry}
                       className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition shadow-sm shrink-0"
                     >
@@ -2320,12 +2779,41 @@ ${clausesCombined}`
                     {classCode}학급
                   </span>
                   <div>
-                    <div className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                    <div className="text-xs font-black text-indigo-950 flex items-center gap-2 flex-wrap">
                       <span>담당 대륙:</span>
                       <span className="text-indigo-600 underline underline-offset-2 font-black">{classContinents[classCode] || "전체"}</span>
+                      
+                      {/* Class Dedicated Access Switch */}
+                      <button
+                        onClick={() => {
+                          const nextMode = !isClassOnlyMode;
+                          setIsClassOnlyMode(nextMode);
+                          if (nextMode) {
+                            setSelectedContinentFilter(classContinents[classCode] || "전체");
+                          }
+                        }}
+                        className={`ml-1 px-2.5 py-1 rounded-lg text-[10.5px] font-black transition flex items-center gap-1 shadow-2xs cursor-pointer ${
+                          isClassOnlyMode 
+                            ? "bg-amber-500 hover:bg-amber-600 text-white" 
+                            : "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                        }`}
+                        title="클릭하여 자기 학급 국가만 열람하거나 전체 국가 목록을 해제합니다"
+                      >
+                        {isClassOnlyMode ? "🔒 자기 학급 전용 접속 [ON]" : "🌐 전체 국가 탐구 [OFF]"}
+                      </button>
+
+                      <button
+                        onClick={() => setShowClassAllocationModal(true)}
+                        className="px-2 py-0.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 text-[10px] font-extrabold rounded-md transition border border-indigo-200 flex items-center gap-1 cursor-pointer"
+                        title="2026 학급별 대륙 및 모둠 국가 배정표 전체 보기"
+                      >
+                        📋 학급 배정표
+                      </button>
                     </div>
-                    <div className="text-[10px] text-slate-500 font-medium">
-                      학급 배정 대륙의 샘플 국가만 정렬하여 표시 중입니다 ({filteredCountries.length}개 국가)
+                    <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                      {isClassOnlyMode 
+                        ? `🔒 [${classCode}학급 전용 모드] - ${classContinents[classCode] || "배정 대륙"} 국가들만 표시 중입니다 (${filteredCountries.length}개 국가)`
+                        : `🌐 [전체 탐구 모드] - 지구촌 전체 국가를 자유롭게 열람 중입니다 (${filteredCountries.length}개 국가)`}
                     </div>
                   </div>
                 </div>
@@ -2347,7 +2835,12 @@ ${clausesCombined}`
                     return (
                       <button
                         key={tab.id}
-                        onClick={() => setSelectedContinentFilter(tab.id)}
+                        onClick={() => {
+                          if (isClassOnlyMode) {
+                            setIsClassOnlyMode(false);
+                          }
+                          setSelectedContinentFilter(tab.id);
+                        }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition whitespace-nowrap cursor-pointer ${
                           isSelected
                             ? "bg-indigo-600 text-white shadow-xs scale-105"
@@ -2360,6 +2853,21 @@ ${clausesCombined}`
                   })}
                 </div>
               </div>
+
+              {isClassOnlyMode && (
+                <div className="bg-amber-50/90 border border-amber-200/80 rounded-xl px-3.5 py-2 text-xs font-bold text-amber-900 flex items-center justify-between gap-2 shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-600">🔒</span>
+                    <span><strong>[{classCode}학급 전용 접속 모드]</strong> 가 활성화되어 <strong>{classContinents[classCode] || "배정 대륙"}</strong> 담당 국가만 나타납니다.</span>
+                  </div>
+                  <button
+                    onClick={() => setIsClassOnlyMode(false)}
+                    className="text-amber-800 hover:text-amber-950 underline text-[11px] font-black shrink-0 cursor-pointer"
+                  >
+                    모든 대륙 국가 잠금 해제 🔓
+                  </button>
+                </div>
+              )}
 
               {filteredCountries.length === 0 && (
                 <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-8 text-center space-y-3 my-2">
@@ -5755,6 +6263,137 @@ ${clausesCombined}`
                 </p>
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2026 청곡 6학년 학급 및 모둠별 대륙/국가 배정표 Modal */}
+      {showClassAllocationModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto border border-indigo-100">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="bg-indigo-600 text-white text-xs font-black px-2.5 py-1 rounded-lg">
+                  2026 청곡 6학년
+                </span>
+                <h3 className="text-base font-black text-slate-900">학급 및 모둠별 탐구 대륙/국가 배정표</h3>
+              </div>
+              <button 
+                onClick={() => setShowClassAllocationModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              교통 및 문화 탐구 교육과정에 따라 배정된 반별 대륙 및 모둠별 지정 탐구 국가 현황표입니다.
+            </p>
+
+            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-indigo-50/80 text-indigo-950 font-black border-b border-indigo-150">
+                    <th className="p-2.5 border-r border-indigo-100">반</th>
+                    <th className="p-2.5 border-r border-indigo-100">대륙</th>
+                    <th className="p-2.5 border-r border-indigo-100">1모둠</th>
+                    <th className="p-2.5 border-r border-indigo-100">2모둠</th>
+                    <th className="p-2.5 border-r border-indigo-100">3모둠</th>
+                    <th className="p-2.5 border-r border-indigo-100">4모둠</th>
+                    <th className="p-2.5 border-r border-indigo-100">5모둠</th>
+                    <th className="p-2.5 text-center">학급 전용 접속 링크</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-150 font-medium text-slate-800">
+                  <tr className={`hover:bg-slate-50/80 ${classCode === '6-1' ? 'bg-indigo-50/40 font-bold' : ''}`}>
+                    <td className="p-2.5 font-bold border-r border-slate-100">1반 (6-1)</td>
+                    <td className="p-2.5 font-bold text-amber-700 border-r border-slate-100">아프리카</td>
+                    <td className="p-2.5 border-r border-slate-100">🇬🇭 가나(2)</td>
+                    <td className="p-2.5 border-r border-slate-100">🇲🇬 마다가스카르(1)</td>
+                    <td className="p-2.5 border-r border-slate-100">🇿🇦 남아공(3)</td>
+                    <td className="p-2.5 border-r border-slate-100">🇪🇬 이집트(4)</td>
+                    <td className="p-2.5 text-slate-400 border-r border-slate-100">-</td>
+                    <td className="p-2 text-center">
+                      <button onClick={() => handleCopyClassLink('6-1')} className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded transition cursor-pointer shadow-2xs">🔗 1반 링크 복사</button>
+                    </td>
+                  </tr>
+                  <tr className={`hover:bg-slate-50/80 ${classCode === '6-2' ? 'bg-indigo-50/40 font-bold' : ''}`}>
+                    <td className="p-2.5 font-bold border-r border-slate-100">2반 (6-2)</td>
+                    <td className="p-2.5 font-bold text-indigo-700 border-r border-slate-100">북아메리카</td>
+                    <td className="p-2.5 text-slate-400 italic border-r border-slate-100" colSpan={5}>미배정 (추후 추가 예정)</td>
+                    <td className="p-2 text-center">
+                      <button onClick={() => handleCopyClassLink('6-2')} className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded transition cursor-pointer shadow-2xs">🔗 2반 링크 복사</button>
+                    </td>
+                  </tr>
+                  <tr className={`hover:bg-slate-50/80 ${classCode === '6-3' ? 'bg-indigo-50/40 font-bold' : ''}`}>
+                    <td className="p-2.5 font-bold border-r border-slate-100">3반 (6-3)</td>
+                    <td className="p-2.5 font-bold text-rose-700 border-r border-slate-100">남아메리카</td>
+                    <td className="p-2.5 border-r border-slate-100">🇧🇷 브라질</td>
+                    <td className="p-2.5 border-r border-slate-100">🇦🇷 아르헨티나</td>
+                    <td className="p-2.5 border-r border-slate-100">🇨🇱 칠레</td>
+                    <td className="p-2.5 border-r border-slate-100">🇻🇪 베네수엘라</td>
+                    <td className="p-2.5 text-slate-400 border-r border-slate-100">-</td>
+                    <td className="p-2 text-center">
+                      <button onClick={() => handleCopyClassLink('6-3')} className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded transition cursor-pointer shadow-2xs">🔗 3반 링크 복사</button>
+                    </td>
+                  </tr>
+                  <tr className={`hover:bg-slate-50/80 ${classCode === '6-4' ? 'bg-indigo-50/40 font-bold' : ''}`}>
+                    <td className="p-2.5 font-bold border-r border-slate-100">4반 (6-4)</td>
+                    <td className="p-2.5 font-bold text-emerald-700 border-r border-slate-100">오세아니아</td>
+                    <td className="p-2.5 border-r border-slate-100">🇳🇿 뉴질랜드(6)</td>
+                    <td className="p-2.5 border-r border-slate-100">🇫🇯 피지(6)</td>
+                    <td className="p-2.5 border-r border-slate-100">🇵🇼 팔라우</td>
+                    <td className="p-2.5 border-r border-slate-100">🇼🇸 사모아</td>
+                    <td className="p-2.5 text-slate-400 border-r border-slate-100">-</td>
+                    <td className="p-2 text-center">
+                      <button onClick={() => handleCopyClassLink('6-4')} className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded transition cursor-pointer shadow-2xs">🔗 4반 링크 복사</button>
+                    </td>
+                  </tr>
+                  <tr className={`hover:bg-slate-50/80 ${classCode === '6-5' ? 'bg-indigo-50/40 font-bold' : ''}`}>
+                    <td className="p-2.5 font-bold border-r border-slate-100">5반 (6-5)</td>
+                    <td className="p-2.5 font-bold text-sky-700 border-r border-slate-100">아시아</td>
+                    <td className="p-2.5 text-slate-400 italic border-r border-slate-100" colSpan={5}>미배정 (추후 추가 예정)</td>
+                    <td className="p-2 text-center">
+                      <button onClick={() => handleCopyClassLink('6-5')} className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded transition cursor-pointer shadow-2xs">🔗 5반 링크 복사</button>
+                    </td>
+                  </tr>
+                  <tr className={`hover:bg-slate-50/80 ${classCode === '6-6' ? 'bg-indigo-50/40 font-bold' : ''}`}>
+                    <td className="p-2.5 font-bold border-r border-slate-100">6반 (6-6)</td>
+                    <td className="p-2.5 font-bold text-purple-700 border-r border-slate-100">북&서유럽</td>
+                    <td className="p-2.5 border-r border-slate-100">🇫🇷 프랑스</td>
+                    <td className="p-2.5 border-r border-slate-100">🇳🇴 노르웨이</td>
+                    <td className="p-2.5 border-r border-slate-100">🇬🇧 영국</td>
+                    <td className="p-2.5 border-r border-slate-100">🇩🇪 독일</td>
+                    <td className="p-2.5 text-slate-400 border-r border-slate-100">-</td>
+                    <td className="p-2 text-center">
+                      <button onClick={() => handleCopyClassLink('6-6')} className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded transition cursor-pointer shadow-2xs">🔗 6반 링크 복사</button>
+                    </td>
+                  </tr>
+                  <tr className={`hover:bg-slate-50/80 ${classCode === '6-7' ? 'bg-indigo-50/40 font-bold' : ''}`}>
+                    <td className="p-2.5 font-bold border-r border-slate-100">7반 (6-7)</td>
+                    <td className="p-2.5 font-bold text-purple-700 border-r border-slate-100">동&남유럽</td>
+                    <td className="p-2.5 border-r border-slate-100">🇵🇹 포르투갈</td>
+                    <td className="p-2.5 border-r border-slate-100">🇷🇺 러시아</td>
+                    <td className="p-2.5 border-r border-slate-100">🇭🇺 헝가리</td>
+                    <td className="p-2.5 border-r border-slate-100">🇮🇹 이탈리아</td>
+                    <td className="p-2.5 text-slate-400 border-r border-slate-100">-</td>
+                    <td className="p-2 text-center">
+                      <button onClick={() => handleCopyClassLink('6-7')} className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded transition cursor-pointer shadow-2xs">🔗 7반 링크 복사</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-900 flex items-center justify-between">
+              <span>💡 아직 국가가 배정되지 않은 반(2반, 5반)은 추후 배정표를 보내주시는 대로 즉시 추가 등록해 드립니다.</span>
+              <button
+                onClick={() => setShowClassAllocationModal(false)}
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-lg shadow-xs transition cursor-pointer shrink-0 ml-3"
+              >
+                확인 및 닫기
+              </button>
             </div>
           </div>
         </div>
