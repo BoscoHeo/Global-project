@@ -511,7 +511,7 @@ const classroomPortfolios = new Map<string, any>();
 
 // Class-specific passcode storage (acts as local cache/fallback)
 const classroomPasscodes = new Map<string, string>([
-  ["master", "3201"]
+  ["master", "8900"]
 ]);
 
 // Class-specific assigned continent storage (acts as local cache/fallback)
@@ -591,8 +591,8 @@ function getAuthorizedClassCode(req: express.Request): { authorized: boolean; cl
     return { authorized: false, classScope: "none" };
   }
   
-  const masterPass = classroomPasscodes.get("master") || "3201";
-  if (passcode === masterPass || passcode === "0000" || passcode.toLowerCase() === "teacher") {
+  const masterPass = classroomPasscodes.get("master") || "8900";
+  if (passcode === masterPass) {
     return { authorized: true, classScope: "all" };
   }
   
@@ -618,7 +618,7 @@ app.get("/api/class-passcode/list", (req, res) => {
     return res.status(401).json({ error: "접근 권한이 없습니다. 마스터 교사 비밀번호가 필요합니다." });
   }
   res.json({
-    master: classroomPasscodes.get("master") || "3201",
+    master: classroomPasscodes.get("master") || "8900",
     custom: Object.fromEntries(classroomPasscodes.entries())
   });
 });
@@ -671,8 +671,8 @@ app.post("/api/class-passcode/verify", (req, res) => {
   const trimmedPasscode = passcode.trim();
 
   // 1. Check master passcode
-  const masterPass = classroomPasscodes.get("master") || "3201";
-  if (trimmedPasscode === masterPass || trimmedPasscode === "0000" || trimmedPasscode.toLowerCase() === "teacher") {
+  const masterPass = classroomPasscodes.get("master") || "8900";
+  if (trimmedPasscode === masterPass) {
     return res.json({ success: true, isMaster: true });
   }
 

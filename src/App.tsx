@@ -1255,16 +1255,7 @@ export default function App() {
 
   const [isTeacherUnlocked, setIsTeacherUnlocked] = useState<boolean>(() => {
     try {
-      const params = new URLSearchParams(window.location.search);
-      const isParamUnlocked = params.get("editor") === "teacher" || params.get("role") === "teacher" || params.get("admin") === "true";
-      if (isParamUnlocked) {
-        try {
-          if (!sessionStorage.getItem("teacher_passcode")) {
-            sessionStorage.setItem("teacher_passcode", "3201");
-          }
-        } catch (_) {}
-      }
-      return isParamUnlocked || !!sessionStorage.getItem("teacher_passcode");
+      return !!sessionStorage.getItem("teacher_passcode");
     } catch (_) {
       return false;
     }
@@ -1280,7 +1271,7 @@ export default function App() {
   }, [unlockedClassScope]);
   
   // Custom class-specific passcodes config states
-  const [classPasscodes, setClassPasscodes] = useState<{ master: string; custom: Record<string, string> }>({ master: "3201", custom: {} });
+  const [classPasscodes, setClassPasscodes] = useState<{ master: string; custom: Record<string, string> }>({ master: "8900", custom: {} });
   const [newClassCodeToSet, setNewClassCodeToSet] = useState<string>("");
   const [newPasscodeToSet, setNewPasscodeToSet] = useState<string>("");
 
@@ -4728,7 +4719,7 @@ ${clausesCombined}`
                       <div className="flex gap-2">
                         <input 
                           type="text"
-                          value={classPasscodes.master || "3201"}
+                          value={classPasscodes.master || "8900"}
                           onChange={async (e) => {
                             const val = e.target.value;
                             setClassPasscodes(prev => ({ ...prev, master: val }));
@@ -4744,11 +4735,11 @@ ${clausesCombined}`
                               });
                             } catch (_) {}
                           }}
-                          placeholder="기본: 3201"
+                          placeholder="기본: 8900"
                           className="flex-1 bg-slate-50 border border-slate-250 rounded-lg px-2.5 py-1.5 text-xs font-mono font-black focus:ring-1 focus:ring-rose-500 focus:outline-none text-slate-800"
                         />
                         <button 
-                          onClick={() => alert(`🔑 마스터 비밀번호가 '${classPasscodes.master || "3201"}'(으)로 실시간 서버에 안전 저장되었습니다.`)}
+                          onClick={() => alert(`🔑 마스터 비밀번호가 '${classPasscodes.master || "8900"}'(으)로 실시간 서버에 안전 저장되었습니다.`)}
                           className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-extrabold transition cursor-pointer"
                         >
                           저장
@@ -4843,7 +4834,7 @@ ${clausesCombined}`
                                               "Content-Type": "application/json",
                                               "x-teacher-passcode": pcode
                                             },
-                                            body: JSON.stringify({ classCode: code, passcode: "3201" })
+                                            body: JSON.stringify({ classCode: code, passcode: "8900" })
                                           });
                                           setClassPasscodes(prev => {
                                             const copy = { ...prev.custom };
@@ -5807,13 +5798,7 @@ ${clausesCombined}`
                 )}
               </div>
 
-              {/* Bypass Shortcut Info */}
-              <div className="bg-rose-50/40 p-3.5 rounded-xl border border-rose-100 text-[10px] text-rose-850">
-                <p className="font-bold">💡 [선생님을 위한 단축 팁]</p>
-                <p className="mt-1 leading-normal font-medium">
-                  매번 암호를 복잡하게 기입하지 않으시려면, 주소 끝에 <code className="font-mono bg-white px-1 py-0.5 border border-rose-200 rounded text-rose-700 font-bold">?role=teacher</code> 를 뒤에 부착해서 접속하면 자동 패스처리됩니다!
-                </p>
-              </div>
+
 
               <div className="flex gap-2.5 pt-2">
                 <button
