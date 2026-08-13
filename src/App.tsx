@@ -1667,7 +1667,7 @@ export default function App() {
         setSelectedCountry(filteredCountries[0]);
       }
     }
-  }, [selectedContinentFilter, classCode, countries, isClassOnlyMode]);
+  }, [selectedContinentFilter, classCode, countries, isClassOnlyMode, isTeacherUnlocked]);
 
   // Add group member (Max 6)
   const handleAddMember = () => {
