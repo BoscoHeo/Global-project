@@ -1223,6 +1223,12 @@ export default function App() {
               body: JSON.stringify({ classCode: "6-1", continent: "아프리카 (Africa)" })
             }).catch(() => {});
           }
+          if (!cleaned["6-6"] || cleaned["6-6"] === "전체") {
+            cleaned["6-6"] = "북&서유럽 (Europe)";
+          }
+          if (!cleaned["6-7"] || cleaned["6-7"] === "전체") {
+            cleaned["6-7"] = "동&남유럽 (Europe)";
+          }
           setClassContinents(prev => ({ ...prev, ...cleaned }));
         }
       }
@@ -2465,7 +2471,9 @@ ${clausesCombined}`
                   >
                     <option value="전체">🌐 전체 (모든 대륙 탐구)</option>
                     <option value="아시아 (Asia)">🌏 아시아 (Asia)</option>
-                    <option value="유럽 (Europe)">🏰 유럽 (Europe)</option>
+                    <option value="유럽 (Europe)">🏰 유럽 (통합)</option>
+                    <option value="북&서유럽 (Europe)">🏰 북&서유럽 (6-6반)</option>
+                    <option value="동&남유럽 (Europe)">🏛️ 동&남유럽 (6-7반)</option>
                     <option value="아프리카 (Africa)">🏜️ 아프리카 (Africa)</option>
                     <option value="남아메리카 (South America)">💃 남아메리카 (South America)</option>
                     <option value="북아메리카 (North America)">🗽 북아메리카 (North America)</option>
@@ -2905,7 +2913,9 @@ ${clausesCombined}`
                   {[
                     { id: "전체", label: "🌐 전체" },
                     { id: "아시아 (Asia)", label: "🌏 아시아" },
-                    { id: "유럽 (Europe)", label: "🏰 유럽" },
+                    { id: "유럽 (Europe)", label: "🏰 유럽 전체" },
+                    { id: "북&서유럽 (Europe)", label: "🏰 북&서유럽" },
+                    { id: "동&남유럽 (Europe)", label: "🏛️ 동&남유럽" },
                     { id: "아프리카 (Africa)", label: "🏜️ 아프리카" },
                     { id: "남아메리카 (South America)", label: "💃 남아메리카" },
                     { id: "북아메리카 (North America)", label: "🗽 북아메리카" },

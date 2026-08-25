@@ -148,7 +148,7 @@ ${scenarioText}
 결과는 반드시 지정된 JSON 규격으로 반환해야 합니다.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -223,7 +223,7 @@ ${resolutionText}
 결과는 반드시 지정된 JSON 규격으로 반환해야 합니다.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -292,7 +292,7 @@ app.post("/api/ai/suggest-campaign", async (req, res) => {
 결과는 반드시 지정된 JSON 규격으로 반환해야 합니다.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -392,7 +392,7 @@ ${countryName}
 결과는 반드시 지정된 JSON 규격으로 반환해야 합니다.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -765,7 +765,7 @@ ${clausesText || "미작성"}
 결과는 반드시 지정된 JSON 규격으로 반환해야 합니다.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
