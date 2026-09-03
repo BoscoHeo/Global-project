@@ -1,18 +1,28 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // 1. Passcodes for classroom validation
     match /classroom_passcodes/{classCode} {
-      allow read, write: if true;
+      allow read, write: if classCode is string && classCode.size() > 0 && classCode.size() <= 64;
     }
+    
+    // 2. Student portfolio entries
     match /classroom_portfolios/{portfolioId} {
-      allow read, write: if true;
+      allow read, write: if portfolioId is string && portfolioId.size() > 0 && portfolioId.size() <= 128;
     }
-    match /teacher_api_keys/{classCode} {
-      allow read, write: if true;
-    }
+    
+    // 3. Continent / Activity status
     match /classroom_continents/{classCode} {
-      allow read, write: if true;
+      allow read, write: if classCode is string && classCode.size() > 0 && classCode.size() <= 64;
     }
+    
+    // 4. Group Real-time Collaboration Workspaces
+    match /classroom_groups/{groupKey} {
+      allow read, write: if groupKey is string && groupKey.size() > 0 && groupKey.size() <= 128;
+    }
+    
+    // 5. Default Deny - block any arbitrary collections and root documents
     match /{document=**} {
       allow read, write: if false;
     }

@@ -23,9 +23,17 @@ import {
   Search, 
   Heart, 
   LogOut,
-  Share2 
+  Share2,
+  RefreshCw,
+  Cloud,
+  DownloadCloud,
+  UploadCloud,
+  CheckCircle2,
+  Bell,
+  Copy,
+  Save
 } from "lucide-react";
-import { EvaluationLevel, TopicType, StoryboardScene, CountryInfo, StampData, GroupMember, OfflineBoothPlan } from "./types";
+import { EvaluationLevel, TopicType, StoryboardScene, CountryInfo, StampData, GroupMember, OfflineBoothPlan, GroupWorkspaceData } from "./types";
 
 // Pre-seeded rich world culture data for academic research & quizzes (13~18차시)
 // Each of the 6 continents contains at least 4 detailed sample countries for classroom assignments
@@ -1131,6 +1139,21 @@ export default function App() {
     }
   };
 
+  // 모둠원 전용 원클릭 공유 링크 생성 (학급 토큰 + 모둠명 파라미터 결합)
+  const getShareUrlForGroup = (cCode: string, gName: string) => {
+    const token = CLASS_SECURITY_TOKENS[cCode] || cCode;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("class", token);
+      url.searchParams.set("group", encodeURIComponent(gName.trim()));
+      url.searchParams.delete("classCode");
+      url.searchParams.delete("code");
+      return url.toString();
+    } catch (e) {
+      return `${window.location.origin}${window.location.pathname}?class=${token}&group=${encodeURIComponent(gName.trim())}`;
+    }
+  };
+
   const handleCopyClassLink = (cCode: string) => {
     if (!isTeacherUnlocked && cCode !== classCode) {
       alert(`🔒 [학급 데이터 보안 격리]\n\n학생 모드에서는 자기 학급(${classCode})만 접속 가능합니다.\n\n타 학급(${cCode}) 링크로 이동하거나 공유하려면 교사 전용 비밀번호(8900)를 입력하여 선생님 인증을 완료해야 합니다.`);
@@ -1145,6 +1168,21 @@ export default function App() {
       });
     } else {
       prompt(`[${cCode}학급 전용 접속 링크]를 복사하여 학생들에게 공유하세요:`, link);
+    }
+  };
+
+  // 모둠 초대 링크 원클릭 복사 핸들러
+  const handleCopyGroupLink = (customGroupName?: string) => {
+    const targetGroup = (customGroupName || groupName || "1모둠").trim();
+    const link = getShareUrlForGroup(classCode, targetGroup);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(() => {
+        alert(`📋 [우리 모둠('${targetGroup}') 실시간 협업 링크 복사 완료!]\n\n같은 모둠 친구들에게 이 링크를 보내주면, 각자의 기기(태블릿/노트북)에서 바로 같은 모둠 공간으로 접속하여 대본과 계획서를 함께 공유하고 작성할 수 있습니다:\n\n${link}`);
+      }).catch(() => {
+        prompt(`[우리 모둠('${targetGroup}') 실시간 협업 링크]를 복사하여 친구들에게 공유하세요:`, link);
+      });
+    } else {
+      prompt(`[우리 모둠('${targetGroup}') 실시간 협업 링크]를 복사하여 친구들에게 공유하세요:`, link);
     }
   };
   const [activeTab, setActiveTab] = useState<string>("curriculum");
@@ -1380,7 +1418,17 @@ export default function App() {
   const [isSubmittingLive, setIsSubmittingLive] = useState<boolean>(false);
   const [videoUrl, setVideoUrl] = useState<string>("");
   
-  const [groupName, setGroupName] = useState<string>("글로벌 지킴이 1모둠");
+  // 모둠명: URL 파라미터(?group=...) 우선 적용, 없을 시 로컬스토리지 복원
+  const [groupName, setGroupName] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlGroup = params.get("group") || params.get("groupName");
+      if (urlGroup) return decodeURIComponent(urlGroup).trim();
+      const savedGroup = localStorage.getItem("expo_groupName");
+      if (savedGroup) return savedGroup;
+    } catch (e) {}
+    return "글로벌 지킴이 1모둠";
+  });
   const [teacherFilterClass, setTeacherFilterClass] = useState<string>(""); // "" means show all, or filtered classroom code e.g., "6-1"
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([
     { name: "김민재", role: "기획/연출" },
@@ -1390,6 +1438,29 @@ export default function App() {
   ]);
   const [newMemberName, setNewMemberName] = useState<string>("");
   const [newMemberRole, setNewMemberRole] = useState<string>("");
+
+  // ==============================================================
+  // 👥 [모둠 실시간 협업 & 클라우드 공유 State]
+  // 초등학생 모둠원들이 같은 모둠 대본과 계획서를 함께 공유하고 작성할 수 있도록 관리합니다.
+  // ==============================================================
+  const [isGroupSyncActive, setIsGroupSyncActive] = useState<boolean>(true); // 실시간 동기화 활성화 여부
+  const [isSyncSaving, setIsSyncSaving] = useState<boolean>(false);          // 클라우드 저장 진행 중
+  const [isSyncLoading, setIsSyncLoading] = useState<boolean>(false);        // 클라우드 불러오기 진행 중
+  const [lastSyncTime, setLastSyncTime] = useState<string>("");              // 마지막 동기화 시각 (예: 11:58:30)
+  const [remoteUpdateAvailable, setRemoteUpdateAvailable] = useState<boolean>(false); // 다른 모둠원의 새로운 저장 감지 여부
+  const [remoteAuthor, setRemoteAuthor] = useState<string>("");              // 새 내용을 저장한 동료 이름
+  const [lastSavedTimestamp, setLastSavedTimestamp] = useState<string>("");  // 로컬에서 마지막으로 인지한 서버 타임스탬프
+  const [myAuthorName, setMyAuthorName] = useState<string>(() => {
+    try {
+      return localStorage.getItem("expo_my_author_name") || "단원";
+    } catch (e) {
+      return "단원";
+    }
+  });
+
+  // 자동 동기화 및 중복 호출 방지를 위한 Ref
+  const isInitialLoadDoneRef = React.useRef<boolean>(false);
+  const autoSaveTimerRef = React.useRef<any>(null);
 
   // Tab 1 States: Storyboard Planner (1-Min Short-form Video Focus)
   const [storyboard, setStoryboard] = useState<StoryboardScene[]>([]);
@@ -1542,6 +1613,177 @@ export default function App() {
       console.error("Failed to save to localStorage:", e);
     }
   }, [groupName, groupMembers, storyboard, boothPlan, userPassportStamps, studentResearch, resolution, operativeClauses, campaignInput, citizenOath, signedOath, videoUrl]);
+
+  // ==============================================================
+  // 👥 [모둠 실시간 협업 & 클라우드 공유 비즈니스 로직]
+  // ==============================================================
+
+  // 1. 모둠 클라우드로 현재 작업 내용 저장 (Save Workspace)
+  const saveToGroupCloud = async (customAuthor?: string, silent: boolean = false) => {
+    if (!groupName.trim() || !classCode.trim()) return;
+    if (!silent) setIsSyncSaving(true);
+    try {
+      const author = (customAuthor || myAuthorName || "모둠원").trim();
+      const payload: GroupWorkspaceData = {
+        classCode: classCode.trim(),
+        groupName: groupName.trim(),
+        groupMembers,
+        selectedCountryName: selectedCountry?.name,
+        selectedCountryCode: selectedCountry?.code,
+        userPassportStamps: userPassportStamps as any,
+        storyboard,
+        boothPlan,
+        studentResearch,
+        resolution,
+        operativeClauses,
+        campaignInput,
+        citizenOath,
+        signedOath,
+        videoUrl,
+        updatedAt: new Date().toISOString(),
+        lastAuthor: author
+      };
+
+      const res = await fetch("/api/group/sync/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const timeStr = new Date().toLocaleTimeString();
+        setLastSyncTime(timeStr);
+        setLastSavedTimestamp(data.updatedAt);
+        setRemoteUpdateAvailable(false);
+        if (!silent) {
+          alert(`☁️ [모둠 클라우드 저장 완료!]\n\n'${groupName}' 모둠의 최신 대본, 부스 계획, 탐구 내용이 안전하게 저장되었습니다.\n같은 모둠 친구들도 실시간으로 함께 공유할 수 있습니다!`);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to save to group cloud:", err);
+      if (!silent) {
+        alert("⚠️ 모둠 클라우드 연결 상태가 불안정합니다. 로컬 저장은 유지되니 안심하시고 잠시 후 다시 시도해 주세요.");
+      }
+    } finally {
+      if (!silent) setIsSyncSaving(false);
+    }
+  };
+
+  // 2. 모둠 클라우드에서 최신 작업 내용 불러오기 (Load Workspace)
+  const loadFromGroupCloud = async (showConfirm: boolean = false) => {
+    if (!groupName.trim() || !classCode.trim()) return;
+    setIsSyncLoading(true);
+    try {
+      const res = await fetch(`/api/group/sync/load?classCode=${encodeURIComponent(classCode)}&groupName=${encodeURIComponent(groupName)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.exists && json.data) {
+          const d = json.data;
+          
+          if (showConfirm) {
+            const ok = window.confirm(`동료 모둠원(${d.lastAuthor || "친구"})이 저장한 최신 모둠 데이터가 있습니다.\n지금 내 화면으로 불러와서 함께 작업하시겠습니까?`);
+            if (!ok) {
+              setIsSyncLoading(false);
+              return;
+            }
+          }
+
+          // 화면 State 복원
+          if (Array.isArray(d.groupMembers) && d.groupMembers.length > 0) setGroupMembers(d.groupMembers);
+          if (Array.isArray(d.storyboard)) setStoryboard(d.storyboard);
+          if (d.boothPlan) setBoothPlan(d.boothPlan);
+          if (d.studentResearch) setStudentResearch(d.studentResearch);
+          if (d.resolution) setResolution(d.resolution);
+          if (Array.isArray(d.operativeClauses)) setOperativeClauses(d.operativeClauses);
+          if (d.campaignInput) setCampaignInput(d.campaignInput);
+          if (d.citizenOath) setCitizenOath(d.citizenOath);
+          if (typeof d.signedOath === "boolean") setSignedOath(d.signedOath);
+          if (d.videoUrl !== undefined) setVideoUrl(d.videoUrl);
+          if (Array.isArray(d.userPassportStamps)) setUserPassportStamps(d.userPassportStamps);
+
+          // 탐구 국가 선택 복원
+          if (d.selectedCountryCode) {
+            const found = countries.find(c => c.code === d.selectedCountryCode);
+            if (found) setSelectedCountry(found);
+          }
+
+          const timeStr = new Date(d.updatedAt || Date.now()).toLocaleTimeString();
+          setLastSyncTime(timeStr);
+          setLastSavedTimestamp(d.updatedAt);
+          setRemoteUpdateAvailable(false);
+
+          if (showConfirm) {
+            alert(`✅ [동기화 성공] '${groupName}' 모둠의 공용 작업 내용이 최신 상태로 업데이트되었습니다!`);
+          }
+        } else if (showConfirm) {
+          alert(`ℹ️ '${groupName}' 모둠으로 저장된 클라우드 데이터가 아직 없습니다. 작성 후 [모둠 클라우드에 저장]을 눌러보세요!`);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load from group cloud:", err);
+      if (showConfirm) {
+        alert("⚠️ 모둠 클라우드 데이터를 불러오지 못했습니다. 네트워크 연결을 확인해 주세요.");
+      }
+    } finally {
+      setIsSyncLoading(false);
+    }
+  };
+
+  // 3. 초기 접속 시 모둠 클라우드에 데이터가 있으면 자동으로 불러오기 시도
+  useEffect(() => {
+    if (!isInitialLoadDoneRef.current) {
+      isInitialLoadDoneRef.current = true;
+      // 마운트 후 부드럽게 원격 클라우드 확인
+      const timer = setTimeout(() => {
+        loadFromGroupCloud(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [groupName, classCode]);
+
+  // 4. 주기적 상태 확인 (5초 폴링 - 가벼운 status API로 대역폭 절약)
+  useEffect(() => {
+    if (!isGroupSyncActive) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        if (!classCode || !groupName) return;
+        const res = await fetch(`/api/group/sync/status?classCode=${encodeURIComponent(classCode)}&groupName=${encodeURIComponent(groupName)}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.exists && json.updatedAt) {
+            // 내가 방금 저장한 시각과 다르고 더 최신일 때
+            if (lastSavedTimestamp && json.updatedAt > lastSavedTimestamp) {
+              setRemoteUpdateAvailable(true);
+              setRemoteAuthor(json.lastAuthor || "동료 모둠원");
+            }
+          }
+        }
+      } catch (e) {}
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [classCode, groupName, isGroupSyncActive, lastSavedTimestamp]);
+
+  // 5. 내용 수정 시 3.5초 Debounce 자동 클라우드 백그라운드 동기화 (모둠원 공유 최신 유지)
+  useEffect(() => {
+    if (!isGroupSyncActive || !isInitialLoadDoneRef.current) return;
+
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      saveToGroupCloud(myAuthorName, true);
+    }, 3500);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [groupMembers, storyboard, boothPlan, studentResearch, resolution, operativeClauses, campaignInput, citizenOath, signedOath, videoUrl]);
 
   // Helper functions to populate sample or reset for students
   const loadEgyptSample = () => {
@@ -2384,6 +2626,34 @@ ${clausesCombined}`
         </div>
       </nav>
 
+      {/* 🔔 다른 모둠원의 새로운 작업 내용 감지 알림 배너 */}
+      {remoteUpdateAvailable && (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-4 py-2.5 shadow-md flex flex-wrap items-center justify-between gap-2 text-xs font-bold z-40 animate-pulse">
+          <div className="flex items-center gap-2">
+            <Bell className="w-4 h-4 animate-bounce shrink-0" />
+            <span>
+              🔔 <strong>모둠 실시간 알림:</strong> 동료 모둠원({remoteAuthor || "친구"})이 방금 새로운 대본이나 계획서를 모둠 클라우드에 저장했습니다!
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => loadFromGroupCloud(true)}
+              className="bg-white text-amber-900 hover:bg-amber-50 px-3 py-1 rounded-lg text-xs font-black shadow-sm transition flex items-center gap-1 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>지금 내 화면으로 동기화</span>
+            </button>
+            <button
+              onClick={() => setRemoteUpdateAvailable(false)}
+              className="text-amber-100 hover:text-white p-1 cursor-pointer"
+              title="닫기"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
         
         {/* Sleek Left Sidebar */}
@@ -2614,6 +2884,106 @@ ${clausesCombined}`
                 <Plus className="w-3 h-3" /> {groupMembers.length >= 6 ? "모둠원 6명 인원 완료" : "모둠원 추가하기 (최대 6명)"}
               </button>
             </div>
+
+            {/* 👥 우리 모둠 실시간 클라우드 공유 & 협업 패널 */}
+            <div className="mt-3 pt-3 border-t border-slate-200">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10.5px] font-extrabold text-indigo-900 flex items-center gap-1.5">
+                  <Cloud className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>모둠 실시간 협업 공유</span>
+                </span>
+                <button
+                  onClick={() => setIsGroupSyncActive(!isGroupSyncActive)}
+                  className={`text-[9px] px-1.5 py-0.5 rounded font-black border transition cursor-pointer ${
+                    isGroupSyncActive 
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                      : "bg-slate-100 text-slate-500 border-slate-200"
+                  }`}
+                  title="실시간 클라우드 자동 동기화 켜기/끄기"
+                >
+                  {isGroupSyncActive ? "🟢 연동 ON" : "⚪ 연동 OFF"}
+                </button>
+              </div>
+
+              {/* 내 닉네임/작업자 이름 설정 */}
+              <div className="mb-2">
+                <label className="text-[9.5px] font-bold text-slate-500 block mb-0.5">내 이름 (동료에게 표시될 이름)</label>
+                <input
+                  type="text"
+                  value={myAuthorName}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    setMyAuthorName(val);
+                    try { localStorage.setItem("expo_my_author_name", val); } catch (err) {}
+                  }}
+                  placeholder="예: 김민재"
+                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[11px] font-bold text-slate-800 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              {/* 상태 안내 뱃지 */}
+              <div className="bg-indigo-50/60 rounded-lg p-2 border border-indigo-150/70 mb-2.5 text-[10px] text-slate-600 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-indigo-850 flex items-center gap-1">
+                    {isSyncSaving ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 text-amber-500 animate-spin" />
+                        <span>클라우드 저장 중...</span>
+                      </>
+                    ) : isSyncLoading ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 text-indigo-500 animate-spin" />
+                        <span>최신 내용 수신 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <span>{groupName} 클라우드 연결됨</span>
+                      </>
+                    )}
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-mono">
+                    {lastSyncTime || "자동 연동"}
+                  </span>
+                </div>
+                <p className="text-[9.5px] text-slate-500 leading-tight">
+                  내가 작성한 내용은 모둠 클라우드에 3초마다 자동 저장되며, 친구들의 기기에도 공유됩니다.
+                </p>
+              </div>
+
+              {/* 원클릭 컨트롤 버튼군 */}
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    onClick={() => saveToGroupCloud(myAuthorName, false)}
+                    disabled={isSyncSaving}
+                    className="py-1.5 px-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-[10.5px] font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
+                    title="현재 작성한 내용을 모둠 클라우드에 즉시 저장합니다."
+                  >
+                    <Save className="w-3 h-3" />
+                    <span>모둠 저장</span>
+                  </button>
+                  <button
+                    onClick={() => loadFromGroupCloud(true)}
+                    disabled={isSyncLoading}
+                    className="py-1.5 px-2 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-[10.5px] font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
+                    title="동료가 작성한 최신 내용을 가져옵니다."
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isSyncLoading ? "animate-spin" : ""}`} />
+                    <span>최신 가져오기</span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => handleCopyGroupLink(groupName)}
+                  className="w-full py-1.5 px-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg text-[10.5px] font-extrabold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
+                  title="같은 모둠 친구들에게 전달할 전용 링크 복사"
+                >
+                  <Share2 className="w-3 h-3 text-emerald-600" />
+                  <span>🔗 우리 모둠 실시간 초대 링크 복사</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Curriculum Guide Tree Navigation */}
@@ -2752,6 +3122,67 @@ ${clausesCombined}`
         {/* Master Workspace Content Frame */}
         <main className="flex-1 flex flex-col p-6 md:p-8 lg:overflow-y-auto">
           
+          {/* 👥 우리 모둠 실시간 클라우드 협업 & 동기화 상태 바 (학생용) */}
+          {activeTab !== "teacher" && (
+            <div className="mb-4 bg-white border border-indigo-200/80 rounded-2xl p-3.5 shadow-xs flex flex-wrap items-center justify-between gap-3 text-left">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-150 flex items-center justify-center shrink-0">
+                  <Cloud className="w-4 h-4 text-indigo-600" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-slate-800">
+                      {classCode.replace('-', '학년 ')}반 • {groupName}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9.5px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      실시간 동기화 켜짐
+                    </span>
+                    {remoteUpdateAvailable && (
+                      <span className="inline-flex items-center gap-1 text-[9.5px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-white animate-bounce">
+                        <Bell className="w-2.5 h-2.5" />
+                        동료가 새 내용 저장함!
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    같은 모둠 친구들과 대본·부스계획을 실시간으로 함께 공유하고 있습니다. (최근 연동: {lastSyncTime || "방금"})
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-center shrink-0">
+                <button
+                  onClick={() => loadFromGroupCloud(true)}
+                  disabled={isSyncLoading}
+                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-700 hover:text-indigo-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                  title="모둠 친구가 수정한 최신 대본/계획 가져오기"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncLoading ? "animate-spin" : ""}`} />
+                  <span>최신 불러오기</span>
+                </button>
+                <button
+                  onClick={() => saveToGroupCloud(myAuthorName, false)}
+                  disabled={isSyncSaving}
+                  className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                  title="내가 작성한 내용을 모둠 클라우드에 지금 즉시 저장"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>모둠에 저장</span>
+                </button>
+                <button
+                  onClick={() => handleCopyGroupLink(groupName)}
+                  className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                  title="같은 모둠 친구에게 보낼 공유 링크 복사"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">모둠 초대 링크 복사</span>
+                  <span className="sm:hidden">초대</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Active Academic Guidance Banner for students */}
           {activeTab !== "teacher" && (
             <div className="mb-6 bg-gradient-to-r from-indigo-50/50 via-amber-50/30 to-rose-50/20 border border-slate-200/85 rounded-2xl p-4 md:p-5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 shadow-sm text-left">

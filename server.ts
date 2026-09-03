@@ -509,6 +509,9 @@ ${countryName}
 // Global in-memory storage for cross-device classroom aggregation (acts as local cache/fallback)
 const classroomPortfolios = new Map<string, any>();
 
+// 모둠원 간 실시간 공동 작업 데이터 저장소 (인메모리 캐시 및 Firestore 연동)
+const classroomGroupWorkspaces = new Map<string, any>();
+
 // Class-specific passcode storage (acts as local cache/fallback)
 const classroomPasscodes = new Map<string, string>([
   ["master", "8900"]
@@ -570,6 +573,16 @@ async function syncFromFirestore() {
       }
     });
     console.log(`[Firebase] Loaded ${portfoliosSnapshot.size} student portfolios from Firestore.`);
+
+    // 5. Sync Classroom Collaborative Group Workspaces
+    const groupsSnapshot = await getDocs(collection(db, "classroom_groups"));
+    groupsSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data) {
+        classroomGroupWorkspaces.set(doc.id, data);
+      }
+    });
+    console.log(`[Firebase] Loaded ${groupsSnapshot.size} collaborative group workspaces from Firestore.`);
   } catch (err: any) {
     console.error("[Firebase] Error performing initial database sync:", err);
   }
@@ -899,6 +912,121 @@ app.post("/api/portfolio/reset", async (req, res) => {
   }
 
   res.json({ success: true });
+});
+
+// ==========================================
+// [모둠 실시간 협업 & 클라우드 공유 API]
+// 초등 6학년 학생들이 같은 모둠 안에서 조사 내용, 대본, 부스 계획 등을 공유할 수 있도록 지원합니다.
+// ==========================================
+
+// 1. 모둠 실시간 작업 상태 저장 (Save Workspace)
+app.post("/api/group/sync/save", async (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload || !payload.groupName || !payload.classCode) {
+      return res.status(400).json({ error: "학급 코드(classCode)와 모둠명(groupName)은 필수 항목입니다." });
+    }
+
+    const classCodeVal = String(payload.classCode).trim();
+    const groupNameVal = String(payload.groupName).trim();
+    const groupKey = `${classCodeVal}_${groupNameVal}`;
+
+    const workspaceData = {
+      ...payload,
+      classCode: classCodeVal,
+      groupName: groupNameVal,
+      updatedAt: new Date().toISOString(),
+      lastAuthor: payload.lastAuthor || "모둠원",
+      ip: req.ip || "unknown"
+    };
+
+    // 1) 서버 인메모리 캐시 갱신 (빠른 응답 보장)
+    classroomGroupWorkspaces.set(groupKey, workspaceData);
+
+    // 2) Firestore에 영구 보관 (DB 연결 시)
+    if (db) {
+      try {
+        await setDoc(doc(db, "classroom_groups", groupKey), workspaceData);
+        console.log(`[Group Sync] Workspace '${groupKey}' saved to Firestore by ${workspaceData.lastAuthor}`);
+      } catch (dbErr) {
+        console.error(`[Group Sync] Firestore save error for '${groupKey}':`, dbErr);
+      }
+    }
+
+    return res.json({
+      success: true,
+      groupKey,
+      updatedAt: workspaceData.updatedAt,
+      message: `'${groupNameVal}' 모둠의 작업 내용이 모둠 클라우드에 안전하게 공유/동기화되었습니다.`
+    });
+  } catch (error: any) {
+    console.error("[Group Sync] Save error:", error);
+    return res.status(500).json({ error: "모둠 작업 저장 중 오류가 발생했습니다." });
+  }
+});
+
+// 2. 모둠 최신 작업 상태 불러오기 (Load Workspace)
+app.get("/api/group/sync/load", async (req, res) => {
+  try {
+    const classCodeVal = String(req.query.classCode || "").trim();
+    const groupNameVal = String(req.query.groupName || "").trim();
+
+    if (!classCodeVal || !groupNameVal) {
+      return res.status(400).json({ error: "학급 코드와 모둠명을 모두 제공해야 합니다." });
+    }
+
+    const groupKey = `${classCodeVal}_${groupNameVal}`;
+
+    // 인메모리 캐시 우선 확인
+    let data = classroomGroupWorkspaces.get(groupKey);
+
+    // Firestore에서 추가 조회 (인메모리에 없거나 DB 확인)
+    if (!data && db) {
+      try {
+        const snapshot = await getDocs(collection(db, "classroom_groups"));
+        snapshot.docs.forEach(d => {
+          if (d.id === groupKey) {
+            data = d.data();
+            classroomGroupWorkspaces.set(groupKey, data);
+          }
+        });
+      } catch (dbErr) {
+        console.error(`[Group Sync] Firestore read error for '${groupKey}':`, dbErr);
+      }
+    }
+
+    if (!data) {
+      return res.json({ exists: false, message: "저장된 모둠 공동 작업 내용이 아직 없습니다." });
+    }
+
+    return res.json({ exists: true, data });
+  } catch (error: any) {
+    console.error("[Group Sync] Load error:", error);
+    return res.status(500).json({ error: "모둠 작업 불러오기 중 오류가 발생했습니다." });
+  }
+});
+
+// 3. 모둠 최신 갱신 상태 가볍게 조회 (Poll/Status Check - 대역폭 절약용)
+app.get("/api/group/sync/status", (req, res) => {
+  const classCodeVal = String(req.query.classCode || "").trim();
+  const groupNameVal = String(req.query.groupName || "").trim();
+
+  if (!classCodeVal || !groupNameVal) {
+    return res.status(400).json({ error: "학급 코드와 모둠명이 필요합니다." });
+  }
+
+  const groupKey = `${classCodeVal}_${groupNameVal}`;
+  const data = classroomGroupWorkspaces.get(groupKey);
+
+  if (!data) {
+    return res.json({ exists: false });
+  }
+
+  return res.json({
+    exists: true,
+    updatedAt: data.updatedAt,
+    lastAuthor: data.lastAuthor || "모둠원"
+  });
 });
 
 // Route: Update teacher-configured API Key in server memory

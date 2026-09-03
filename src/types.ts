@@ -114,3 +114,47 @@ export interface StudentGroupProgress {
     evaluatedAt: string;
   };
 }
+
+/**
+ * 모둠원 간 실시간 클라우드 공유 및 협업용 통합 데이터 모델
+ */
+export interface GroupWorkspaceData {
+  classCode: string;
+  groupName: string;
+  groupMembers: GroupMember[];
+  selectedCountryName?: string;
+  selectedCountryCode?: string;
+  userPassportStamps?: StampData[];
+  storyboard: StoryboardScene[];
+  boothPlan: OfflineBoothPlan;
+  studentResearch: {
+    food: string;
+    greeting: string;
+    costume: string;
+    festival: string;
+  };
+  resolution: {
+    sponsorCountry: string;
+    resolutionNumber: string;
+    title: string;
+    preamble: string;
+  };
+  operativeClauses: string[];
+  campaignInput: {
+    title: string;
+    slogan: string;
+    actionItem1: string;
+    actionItem2: string;
+  };
+  citizenOath: {
+    studentName: string;
+    pledge1: string;
+    pledge2: string;
+    pledge3: string;
+  };
+  signedOath: boolean;
+  videoUrl: string;
+  updatedAt: string;
+  lastAuthor?: string;
+}
+

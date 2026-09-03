@@ -71,6 +71,29 @@
         }
       },
       "required": ["continent"]
+    },
+    "ClassroomGroupWorkspace": {
+      "title": "Classroom Group Workspace",
+      "description": "Real-time collaborative workspace data shared across members of a specific student group",
+      "type": "object",
+      "properties": {
+        "classCode": { "type": "string", "maxLength": 20 },
+        "groupName": { "type": "string", "maxLength": 50 },
+        "groupMembers": { "type": "array" },
+        "selectedCountry": { "type": "string" },
+        "storyboard": { "type": "array" },
+        "boothPlan": { "type": "object" },
+        "studentResearch": { "type": "object" },
+        "resolution": { "type": "object" },
+        "operativeClauses": { "type": "array" },
+        "campaignInput": { "type": "object" },
+        "citizenOath": { "type": "object" },
+        "signedOath": { "type": "boolean" },
+        "videoUrl": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "lastAuthor": { "type": "string" }
+      },
+      "required": ["classCode", "groupName"]
     }
   },
   "firestore": {
@@ -97,6 +120,12 @@
         "$ref": "#/entities/ClassroomContinent"
       },
       "description": "Stores assigned continents for each class"
+    },
+    "/classroom_groups/{groupKey}": {
+      "schema": {
+        "$ref": "#/entities/ClassroomGroupWorkspace"
+      },
+      "description": "Stores active collaborative shared workspace data for student group members"
     }
   }
 }
