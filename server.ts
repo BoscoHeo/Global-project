@@ -512,6 +512,9 @@ const classroomPortfolios = new Map<string, any>();
 // 모둠원 간 실시간 공동 작업 데이터 저장소 (인메모리 캐시 및 Firestore 연동)
 const classroomGroupWorkspaces = new Map<string, any>();
 
+// 모둠별 비밀번호(PIN) 저장소 (인메모리 캐시 및 Firestore 연동)
+const classroomGroupPasscodes = new Map<string, string>();
+
 // Class-specific passcode storage (acts as local cache/fallback)
 const classroomPasscodes = new Map<string, string>([
   ["master", "8900"]
@@ -583,6 +586,16 @@ async function syncFromFirestore() {
       }
     });
     console.log(`[Firebase] Loaded ${groupsSnapshot.size} collaborative group workspaces from Firestore.`);
+
+    // 6. Sync Classroom Group Passcodes
+    const groupPasscodesSnapshot = await getDocs(collection(db, "classroom_group_passcodes"));
+    groupPasscodesSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data && data.passcode) {
+        classroomGroupPasscodes.set(doc.id, String(data.passcode));
+      }
+    });
+    console.log(`[Firebase] Loaded ${groupPasscodesSnapshot.size} group passcodes from Firestore.`);
   } catch (err: any) {
     console.error("[Firebase] Error performing initial database sync:", err);
   }
@@ -1027,6 +1040,169 @@ app.get("/api/group/sync/status", (req, res) => {
     updatedAt: data.updatedAt,
     lastAuthor: data.lastAuthor || "모둠원"
   });
+});
+
+// ==========================================
+// [모둠별 비밀번호(PIN) 잠금 & 보안 관리 API]
+// 다른 모둠 친구가 몰래 들어와 대본을 보거나 수정하지 못하도록 4자리 비밀번호로 잠급니다.
+// ==========================================
+
+// 1. 모둠 비밀번호 검증 및 설정 상태 확인 (Verify Passcode)
+app.post("/api/group/passcode/verify", (req, res) => {
+  const { classCode, groupName, passcode } = req.body;
+  const classCodeVal = String(classCode || "").trim();
+  const groupNameVal = String(groupName || "").trim();
+  const inputPasscode = String(passcode || "").trim();
+
+  if (!classCodeVal || !groupNameVal) {
+    return res.status(400).json({ error: "학급 코드와 모둠명은 필수입니다." });
+  }
+
+  const groupKey = `${classCodeVal}_${groupNameVal}`;
+  const savedPasscode = classroomGroupPasscodes.get(groupKey);
+
+  // 아직 비밀번호가 등록되지 않은 모둠인 경우
+  if (!savedPasscode) {
+    return res.json({ 
+      isSet: false, 
+      valid: false, 
+      message: "비밀번호가 아직 설정되지 않았습니다. 우리 모둠의 4자리 비밀번호를 최초 등록해 주세요." 
+    });
+  }
+
+  // 교사 마스터 비밀번호(8900) 입력 시 마스터 패스 허용
+  if (inputPasscode === "8900") {
+    return res.json({ isSet: true, valid: true, isMaster: true });
+  }
+
+  // 모둠 비밀번호 일치 여부 확인
+  if (inputPasscode === savedPasscode) {
+    return res.json({ isSet: true, valid: true });
+  }
+
+  return res.status(401).json({ 
+    isSet: true, 
+    valid: false, 
+    error: "모둠 비밀번호가 올바르지 않습니다. 같은 모둠 친구에게 확인하거나 선생님께 문의하세요." 
+  });
+});
+
+// 2. 모둠 비밀번호 등록 및 변경 (Set Passcode)
+app.post("/api/group/passcode/set", async (req, res) => {
+  try {
+    const { classCode, groupName, passcode, currentPasscode } = req.body;
+    const classCodeVal = String(classCode || "").trim();
+    const groupNameVal = String(groupName || "").trim();
+    const newPasscode = String(passcode || "").trim();
+
+    if (!classCodeVal || !groupNameVal || !newPasscode) {
+      return res.status(400).json({ error: "학급 코드, 모둠명, 새 비밀번호는 필수입니다." });
+    }
+
+    if (newPasscode.length < 2 || newPasscode.length > 20) {
+      return res.status(400).json({ error: "비밀번호는 2~20자리로 설정해 주세요." });
+    }
+
+    const groupKey = `${classCodeVal}_${groupNameVal}`;
+    const existingPasscode = classroomGroupPasscodes.get(groupKey);
+
+    // 이미 비밀번호가 설정되어 있는 경우, 이전 비번이나 교사 마스터 비번(8900) 검증
+    if (existingPasscode) {
+      const cur = String(currentPasscode || "").trim();
+      if (cur !== existingPasscode && cur !== "8900") {
+        return res.status(403).json({ error: "기존 비밀번호가 일치하지 않아 변경할 수 없습니다." });
+      }
+    }
+
+    // 1) 인메모리 캐시 저장
+    classroomGroupPasscodes.set(groupKey, newPasscode);
+
+    // 2) Firestore 영구 저장
+    if (db) {
+      try {
+        await setDoc(doc(db, "classroom_group_passcodes", groupKey), {
+          classCode: classCodeVal,
+          groupName: groupNameVal,
+          passcode: newPasscode,
+          updatedAt: new Date().toISOString()
+        });
+        console.log(`[Group Passcode] Saved passcode for '${groupKey}' to Firestore.`);
+      } catch (dbErr) {
+        console.error(`[Group Passcode] Firestore error for '${groupKey}':`, dbErr);
+      }
+    }
+
+    return res.json({ 
+      success: true, 
+      message: `'${groupNameVal}' 모둠의 비밀번호가 성공적으로 설정되었습니다.` 
+    });
+  } catch (error: any) {
+    console.error("[Group Passcode] Set error:", error);
+    return res.status(500).json({ error: "비밀번호 설정 중 오류가 발생했습니다." });
+  }
+});
+
+// 3. 교사 전용: 해당 학급 모둠별 비밀번호 목록 조회 (List Passcodes)
+app.get("/api/group/passcode/list", (req, res) => {
+  const authInfo = getAuthorizedClassCode(req);
+  if (!authInfo.authorized) {
+    return res.status(401).json({ error: "교사 인증이 필요합니다." });
+  }
+
+  const classCodeVal = String(req.query.classCode || authInfo.classScope || "6-1").trim();
+  const result: Array<{ groupName: string; isSet: boolean; passcode: string }> = [];
+
+  // 기본 1~4모둠 점검
+  const targetGroups = ["1모둠", "2모둠", "3모둠", "4모둠"];
+  for (const g of targetGroups) {
+    const key = `${classCodeVal}_${g}`;
+    const code = classroomGroupPasscodes.get(key) || "";
+    result.push({
+      groupName: g,
+      isSet: !!code,
+      passcode: code
+    });
+  }
+
+  // 추가로 등록된 커스텀 모둠이 있다면 함께 포함
+  for (const [key, code] of classroomGroupPasscodes.entries()) {
+    if (key.startsWith(`${classCodeVal}_`)) {
+      const gName = key.replace(`${classCodeVal}_`, "");
+      if (!targetGroups.includes(gName)) {
+        result.push({
+          groupName: gName,
+          isSet: true,
+          passcode: code
+        });
+      }
+    }
+  }
+
+  return res.json(result);
+});
+
+// 4. 교사 전용: 특정 모둠 비밀번호 초기화 (Reset Passcode)
+app.post("/api/group/passcode/reset", async (req, res) => {
+  const authInfo = getAuthorizedClassCode(req);
+  if (!authInfo.authorized) {
+    return res.status(401).json({ error: "교사 인증이 필요합니다." });
+  }
+
+  const { classCode, groupName } = req.body;
+  const groupKey = `${String(classCode).trim()}_${String(groupName).trim()}`;
+
+  classroomGroupPasscodes.delete(groupKey);
+
+  if (db) {
+    try {
+      await deleteDoc(doc(db, "classroom_group_passcodes", groupKey));
+      console.log(`[Group Passcode] Deleted passcode for '${groupKey}' from Firestore.`);
+    } catch (err) {
+      console.error(`[Group Passcode] Error deleting passcode for '${groupKey}':`, err);
+    }
+  }
+
+  return res.json({ success: true, message: `'${groupName}' 모둠 비밀번호가 초기화되었습니다.` });
 });
 
 // Route: Update teacher-configured API Key in server memory

@@ -1462,6 +1462,163 @@ export default function App() {
   const isInitialLoadDoneRef = React.useRef<boolean>(false);
   const autoSaveTimerRef = React.useRef<any>(null);
 
+  // ==============================================================
+  // 🔒 [모둠별 비밀번호(PIN) 잠금 & 보안 격리 State 및 로직]
+  // ==============================================================
+  const [isGroupUnlocked, setIsGroupUnlocked] = useState<boolean>(true);
+  const [showGroupPasscodeModal, setShowGroupPasscodeModal] = useState<boolean>(false);
+  const [isGroupPasscodeUnset, setIsGroupPasscodeUnset] = useState<boolean>(false);
+  const [inputGroupPasscode, setInputGroupPasscode] = useState<string>("");
+  const [groupPasscodeError, setGroupPasscodeError] = useState<string>("");
+  const [teacherGroupPasscodeList, setTeacherGroupPasscodeList] = useState<Array<{ groupName: string; isSet: boolean; passcode: string }>>([]);
+
+  // 모둠 비밀번호 검증 함수
+  const verifyCurrentGroupAccess = async (targetClass: string, targetGroup: string, autoPrompt: boolean = true) => {
+    if (isTeacherUnlocked) {
+      setIsGroupUnlocked(true);
+      setShowGroupPasscodeModal(false);
+      return;
+    }
+
+    const groupKey = `${targetClass}_${targetGroup}`;
+    const savedPin = localStorage.getItem(`group_pin_${groupKey}`) || "";
+
+    try {
+      const res = await fetch("/api/group/passcode/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classCode: targetClass, groupName: targetGroup, passcode: savedPin })
+      });
+
+      const data = await res.json();
+      if (!data.isSet) {
+        // 아직 비밀번호가 없는 모둠 -> 최초 설정 모달
+        setIsGroupUnlocked(false);
+        setIsGroupPasscodeUnset(true);
+        setGroupPasscodeError("");
+        if (autoPrompt) setShowGroupPasscodeModal(true);
+      } else if (data.valid) {
+        // 저장된 PIN으로 인증 성공
+        setIsGroupUnlocked(true);
+        setShowGroupPasscodeModal(false);
+        setIsGroupPasscodeUnset(false);
+        setGroupPasscodeError("");
+      } else {
+        // 비밀번호가 설정되어 있으나 틀렸거나 미입력
+        setIsGroupUnlocked(false);
+        setIsGroupPasscodeUnset(false);
+        setGroupPasscodeError("");
+        if (autoPrompt) setShowGroupPasscodeModal(true);
+      }
+    } catch (err) {
+      console.error("Group passcode verify error:", err);
+    }
+  };
+
+  // 모둠이나 학급 변경 시 비밀번호 검사 트리거
+  useEffect(() => {
+    verifyCurrentGroupAccess(classCode, groupName, true);
+  }, [classCode, groupName, isTeacherUnlocked]);
+
+  // 비밀번호 제출 핸들러 (신규 설정 또는 잠금 해제)
+  const handleGroupPasscodeSubmit = async () => {
+    const pin = inputGroupPasscode.trim();
+    if (!pin) {
+      setGroupPasscodeError("비밀번호를 입력해 주세요.");
+      return;
+    }
+
+    const groupKey = `${classCode}_${groupName}`;
+
+    if (isGroupPasscodeUnset) {
+      // 신규 등록
+      try {
+        const res = await fetch("/api/group/passcode/set", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ classCode, groupName, passcode: pin })
+        });
+        if (res.ok) {
+          localStorage.setItem(`group_pin_${groupKey}`, pin);
+          setIsGroupUnlocked(true);
+          setShowGroupPasscodeModal(false);
+          setInputGroupPasscode("");
+          setIsGroupPasscodeUnset(false);
+          alert(`🎉 [${groupName} 비밀번호 등록 완료!]\n\n우리 모둠의 비밀번호('${pin}')가 등록되었습니다. 모둠 친구들과 비밀번호를 공유해 주세요!`);
+        } else {
+          const errData = await res.json();
+          setGroupPasscodeError(errData.error || "비밀번호 설정에 실패했습니다.");
+        }
+      } catch (err) {
+        setGroupPasscodeError("서버 통신 중 오류가 발생했습니다.");
+      }
+    } else {
+      // 기존 비밀번호 검증
+      try {
+        const res = await fetch("/api/group/passcode/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ classCode, groupName, passcode: pin })
+        });
+        const data = await res.json();
+        if (data.valid) {
+          localStorage.setItem(`group_pin_${groupKey}`, pin);
+          setIsGroupUnlocked(true);
+          setShowGroupPasscodeModal(false);
+          setInputGroupPasscode("");
+          setGroupPasscodeError("");
+        } else {
+          setGroupPasscodeError(data.error || "비밀번호가 올바르지 않습니다.");
+        }
+      } catch (err) {
+        setGroupPasscodeError("서버 통신 중 오류가 발생했습니다.");
+      }
+    }
+  };
+
+  // 교사용 모둠 비밀번호 목록 조회
+  const fetchTeacherGroupPasscodes = async () => {
+    try {
+      const res = await fetch(`/api/group/passcode/list?classCode=${encodeURIComponent(classCode)}`, {
+        headers: { "x-teacher-passcode": "8900" }
+      });
+      if (res.ok) {
+        const list = await res.json();
+        setTeacherGroupPasscodeList(list);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // 교사용 모둠 비밀번호 초기화
+  const handleTeacherResetGroupPasscode = async (gName: string) => {
+    if (!window.confirm(`'${gName}'의 비밀번호를 초기화하시겠습니까?\n학생들이 다시 원하는 4자리 비밀번호를 등록할 수 있게 됩니다.`)) return;
+    try {
+      const res = await fetch("/api/group/passcode/reset", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "x-teacher-passcode": "8900"
+        },
+        body: JSON.stringify({ classCode, groupName: gName })
+      });
+      if (res.ok) {
+        alert(`'${gName}'의 비밀번호가 성공적으로 초기화되었습니다.`);
+        fetchTeacherGroupPasscodes();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // 교사 탭 진입 시 모둠별 비밀번호 목록 자동 조회
+  useEffect(() => {
+    if (activeTab === "teacher" && isTeacherUnlocked) {
+      fetchTeacherGroupPasscodes();
+    }
+  }, [activeTab, isTeacherUnlocked, classCode]);
+
   // Tab 1 States: Storyboard Planner (1-Min Short-form Video Focus)
   const [storyboard, setStoryboard] = useState<StoryboardScene[]>([]);
   const [editSceneIndex, setEditSceneIndex] = useState<number | null>(null);
@@ -2576,6 +2733,75 @@ ${clausesCombined}`
         </div>
       )}
 
+      {/* 🔒 모둠 전용 4자리 비밀번호(PIN) 잠금 & 보안 인증 모달 */}
+      {showGroupPasscodeModal && !isTeacherUnlocked && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in text-left">
+          <div className="bg-white rounded-3xl max-w-md w-full border-2 border-indigo-200 shadow-2xl p-6 md:p-8 relative">
+            <div className="w-12 h-12 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center justify-center mb-4 shadow-inner">
+              <Lock className="w-6 h-6 text-indigo-600" />
+            </div>
+
+            <span className="text-[11px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-150 inline-block mb-2">
+              {classCode.replace('-', '학년 ')}반 • {groupName} 보안 잠금
+            </span>
+
+            <h3 className="text-lg font-black text-slate-900 mb-2">
+              {isGroupPasscodeUnset 
+                ? "✨ 우리 모둠 비밀번호 최초 등록" 
+                : "🔒 모둠 4자리 비밀번호 입력"}
+            </h3>
+
+            <p className="text-xs text-slate-600 leading-relaxed mb-5">
+              {isGroupPasscodeUnset 
+                ? `아직 '${groupName}'의 비밀번호가 등록되지 않았습니다. 다른 모둠 친구들이 함부로 들어와 내용을 보거나 수정하지 못하도록, 우리 모둠원들만 공유할 4자리 비밀번호(PIN)를 등록해 주세요!`
+                : `'${groupName}'의 작업 공간입니다. 다른 모둠의 무단 접속 및 수정을 방지하기 위해 모둠 비밀번호를 입력해야 내용을 열람하고 함께 작성할 수 있습니다.`}
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  {isGroupPasscodeUnset ? "등록할 4자리 비밀번호 (예: 1234)" : "모둠 비밀번호 (4자리)"}
+                </label>
+                <input 
+                  type="password"
+                  maxLength={10}
+                  value={inputGroupPasscode}
+                  onChange={(e) => {
+                    setInputGroupPasscode(e.target.value);
+                    setGroupPasscodeError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleGroupPasscodeSubmit();
+                  }}
+                  autoFocus
+                  placeholder="비밀번호 입력..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-center text-lg tracking-widest font-black text-slate-850 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+                />
+                {groupPasscodeError && (
+                  <p className="text-[11px] font-bold text-rose-600 mt-2 flex items-center gap-1">
+                    ⚠️ {groupPasscodeError}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={handleGroupPasscodeSubmit}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>{isGroupPasscodeUnset ? "우리 모둠 비밀번호 등록하고 입장" : "비밀번호 확인 및 모둠 입장"}</span>
+                </button>
+              </div>
+
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-150 text-[10.5px] text-slate-500 leading-relaxed">
+                💡 <strong>선생님 안내:</strong> 비밀번호를 잊어버린 경우 선생님께 문의하세요. 선생님은 교사용 관리자 화면에서 각 모둠의 비밀번호를 확인하거나 초기화해 주실 수 있습니다.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sleek Style Upper Navigation */}
       <nav className="h-16 flex items-center justify-between px-6 md:px-8 bg-white border-b border-slate-200 shrink-0 shadow-sm z-30 sticky top-0">
         <div className="flex items-center gap-3">
@@ -2795,7 +3021,21 @@ ${clausesCombined}`
                 )}
               </div>
               <div>
-                <label className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 block mb-1">👥 실천 탐구 모둠명</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 block">👥 실천 탐구 모둠명</label>
+                  <button
+                    onClick={() => {
+                      setInputGroupPasscode("");
+                      setGroupPasscodeError("");
+                      setShowGroupPasscodeModal(true);
+                    }}
+                    className="text-[9.5px] font-bold text-indigo-600 hover:text-indigo-850 flex items-center gap-0.5 cursor-pointer"
+                    title="모둠 4자리 비밀번호 설정 또는 변경"
+                  >
+                    <Lock className="w-2.5 h-2.5" />
+                    <span>비번 설정</span>
+                  </button>
+                </div>
                 <input 
                   type="text" 
                   value={groupName}
@@ -5045,6 +5285,74 @@ ${clausesCombined}`
                   </div>
                   <h2 className="text-2xl font-black text-slate-900 tracking-tight">교사 전용 결과 수합 허브</h2>
                   <p className="text-slate-500 text-xs">학생들이 완료하여 추출/제출한 모둠별 수행평가 파일(.json) 데이터를 한자리에 모아 일괄 조회하고 종합 분석합니다.</p>
+                </div>
+
+                {/* 🔐 우리 반 4개 모둠 비밀번호 관리 현황 카드 (선생님 전용) */}
+                <div className="w-full bg-gradient-to-r from-indigo-50/70 via-purple-50/50 to-pink-50/30 border border-indigo-200/80 rounded-2xl p-5 shadow-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                        <Lock className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                          <span>{classCode.replace('-', '학년 ')}반 4개 모둠 비밀번호(PIN) 관리 현황</span>
+                          <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full">실시간 보호</span>
+                        </h3>
+                        <p className="text-[11px] text-slate-500">
+                          다른 모둠 학생의 무단 열람을 막기 위해 각 모둠이 설정한 4자리 비밀번호입니다. 학생이 비밀번호를 잊어버린 경우 여기서 확인하거나 초기화해 주세요.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={fetchTeacherGroupPasscodes}
+                      className="px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>비번 목록 새로고침</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {(teacherGroupPasscodeList.length > 0 ? teacherGroupPasscodeList : [
+                      { groupName: "1모둠", isSet: false, passcode: "" },
+                      { groupName: "2모둠", isSet: false, passcode: "" },
+                      { groupName: "3모둠", isSet: false, passcode: "" },
+                      { groupName: "4모둠", isSet: false, passcode: "" }
+                    ]).slice(0, 4).map((grp) => (
+                      <div key={grp.groupName} className="bg-white rounded-xl border border-indigo-150/80 p-3.5 shadow-2xs flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-black text-slate-800 flex items-center gap-1">
+                            <Users className="w-3.5 h-3.5 text-indigo-600" />
+                            {grp.groupName}
+                          </span>
+                          <span className={`text-[9.5px] px-1.5 py-0.5 rounded font-bold ${
+                            grp.isSet 
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-slate-100 text-slate-500"
+                          }`}>
+                            {grp.isSet ? "🔒 설정 완료" : "⚪ 미설정"}
+                          </span>
+                        </div>
+
+                        <div className="my-2 bg-slate-50 rounded-lg p-2 text-center border border-slate-150">
+                          <span className="text-[10px] text-slate-400 block mb-0.5">현재 비밀번호</span>
+                          <span className="text-sm font-black font-mono tracking-widest text-indigo-700">
+                            {grp.isSet ? grp.passcode : "미등록 (자유 입장)"}
+                          </span>
+                        </div>
+
+                        {grp.isSet && (
+                          <button
+                            onClick={() => handleTeacherResetGroupPasscode(grp.groupName)}
+                            className="w-full mt-1 py-1 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <span>비밀번호 초기화</span>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="flex gap-2 shrink-0 flex-wrap">

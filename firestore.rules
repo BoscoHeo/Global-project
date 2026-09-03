@@ -22,7 +22,12 @@ service cloud.firestore {
       allow read, write: if groupKey is string && groupKey.size() > 0 && groupKey.size() <= 128;
     }
     
-    // 5. Default Deny - block any arbitrary collections and root documents
+    // 5. Group Passcodes (PIN access control)
+    match /classroom_group_passcodes/{groupKey} {
+      allow read, write: if groupKey is string && groupKey.size() > 0 && groupKey.size() <= 128;
+    }
+    
+    // 6. Default Deny - block any arbitrary collections and root documents
     match /{document=**} {
       allow read, write: if false;
     }
