@@ -5343,6 +5343,118 @@ ${clausesCombined}`
                 </div>
               </div>
 
+              {/* 🔐 우리 반 4개 모둠 비밀번호(PIN) 교사 설정 센터 (가로 전체 널찍한 전용 섹션) */}
+              <div className="w-full bg-gradient-to-r from-indigo-50/80 via-purple-50/60 to-pink-50/40 border-2 border-indigo-200/90 rounded-3xl p-6 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-5 pb-4 border-b border-indigo-150/70">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-200">
+                      <Lock className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                        <span>{classCode.replace('-', '학년 ')}반 4개 모둠 비밀번호(PIN) 교사 설정 센터</span>
+                        <span className="text-[10px] bg-indigo-100 text-indigo-700 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-200">
+                          실시간 모둠 격리 보호
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        선생님께서 각 모둠의 4자리 비밀번호를 직접 지정하거나 일괄 부여할 수 있습니다. 다른 모둠 학생의 무단 침입 및 수정을 원천 차단합니다.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <button
+                      onClick={handleTeacherBatchSetPasscodes}
+                      className="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-black rounded-xl transition flex items-center gap-1.5 shadow-md shadow-indigo-100 cursor-pointer"
+                      title="1모둠(1111), 2모둠(2222), 3모둠(3333), 4모둠(4444)으로 한 번에 세팅"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>⚡ 1~4모둠 비번 일괄 설정 (1111~4444)</span>
+                    </button>
+                    <button
+                      onClick={fetchTeacherGroupPasscodes}
+                      className="px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>새로고침</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {(teacherGroupPasscodeList.length > 0 ? teacherGroupPasscodeList : [
+                    { groupName: "1모둠", isSet: false, passcode: "" },
+                    { groupName: "2모둠", isSet: false, passcode: "" },
+                    { groupName: "3모둠", isSet: false, passcode: "" },
+                    { groupName: "4모둠", isSet: false, passcode: "" }
+                  ]).slice(0, 4).map((grp) => (
+                    <div key={grp.groupName} className="bg-white rounded-2xl border-2 border-indigo-150 p-4 shadow-xs flex flex-col justify-between hover:border-indigo-300 hover:shadow-md transition">
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-black text-slate-850 flex items-center gap-1.5">
+                            <Users className="w-4 h-4 text-indigo-600" />
+                            {grp.groupName}
+                          </span>
+                          <span className={`text-[10.5px] px-2 py-0.5 rounded-full font-extrabold ${
+                            grp.isSet 
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-amber-50 text-amber-700 border border-amber-200"
+                          }`}>
+                            {grp.isSet ? "🔒 잠금 설정됨" : "⚪ 미설정"}
+                          </span>
+                        </div>
+
+                        <div className="my-2.5 bg-slate-50 rounded-xl p-3 text-center border border-slate-200/80">
+                          <span className="text-[10px] text-slate-400 font-bold block mb-1">현재 적용된 비밀번호</span>
+                          <span className="text-lg font-black font-mono tracking-widest text-indigo-600">
+                            {grp.isSet ? grp.passcode : "미등록 (자유 입장)"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 선생님 직접 설정 입력란 */}
+                      <div className="mt-3 pt-3 border-t border-slate-150 space-y-2">
+                        <label className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider block">
+                          선생님 지정 새 비밀번호
+                        </label>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            maxLength={10}
+                            placeholder="4자리 입력 (예: 1111)"
+                            value={teacherPasscodeInputs[grp.groupName] || ""}
+                            onChange={(e) => setTeacherPasscodeInputs(prev => ({
+                              ...prev,
+                              [grp.groupName]: e.target.value
+                            }))}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleTeacherSetGroupPasscode(grp.groupName);
+                            }}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-center text-xs font-black tracking-wider focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+                          />
+                          <button
+                            onClick={() => handleTeacherSetGroupPasscode(grp.groupName)}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-extrabold transition shrink-0 cursor-pointer shadow-2xs"
+                          >
+                            저장
+                          </button>
+                        </div>
+
+                        {grp.isSet && (
+                          <button
+                            onClick={() => handleTeacherResetGroupPasscode(grp.groupName)}
+                            className="w-full py-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <span>비밀번호 초기화 (미등록으로 되돌리기)</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -5358,116 +5470,6 @@ ${clausesCombined}`
                   </div>
                   <h2 className="text-2xl font-black text-slate-900 tracking-tight">교사 전용 결과 수합 허브</h2>
                   <p className="text-slate-500 text-xs">학생들이 완료하여 추출/제출한 모둠별 수행평가 파일(.json) 데이터를 한자리에 모아 일괄 조회하고 종합 분석합니다.</p>
-                </div>
-
-                {/* 🔐 우리 반 4개 모둠 비밀번호 관리 현황 카드 (선생님 전용) */}
-                <div className="w-full bg-gradient-to-r from-indigo-50/70 via-purple-50/50 to-pink-50/30 border border-indigo-200/80 rounded-2xl p-5 shadow-xs">
-                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
-                        <Lock className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
-                          <span>{classCode.replace('-', '학년 ')}반 4개 모둠 비밀번호(PIN) 교사 설정 센터</span>
-                          <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full">실시간 보호</span>
-                        </h3>
-                        <p className="text-[11px] text-slate-500">
-                          선생님께서 각 모둠의 비밀번호를 직접 지정하거나 변경할 수 있습니다. 아이들이 서로의 공간을 엿보거나 수정하지 못하도록 완벽히 차단됩니다.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button
-                        onClick={handleTeacherBatchSetPasscodes}
-                        className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-black rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer"
-                        title="1모둠(1111), 2모둠(2222), 3모둠(3333), 4모둠(4444)으로 한 번에 세팅"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>⚡ 1~4모둠 비번 일괄 설정 (1111~4444)</span>
-                      </button>
-                      <button
-                        onClick={fetchTeacherGroupPasscodes}
-                        className="px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg transition flex items-center gap-1 shadow-2xs cursor-pointer"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>새로고침</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                    {(teacherGroupPasscodeList.length > 0 ? teacherGroupPasscodeList : [
-                      { groupName: "1모둠", isSet: false, passcode: "" },
-                      { groupName: "2모둠", isSet: false, passcode: "" },
-                      { groupName: "3모둠", isSet: false, passcode: "" },
-                      { groupName: "4모둠", isSet: false, passcode: "" }
-                    ]).slice(0, 4).map((grp) => (
-                      <div key={grp.groupName} className="bg-white rounded-2xl border-2 border-indigo-150/90 p-4 shadow-sm flex flex-col justify-between hover:border-indigo-300 transition">
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-black text-slate-850 flex items-center gap-1.5">
-                              <Users className="w-4 h-4 text-indigo-600" />
-                              {grp.groupName}
-                            </span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
-                              grp.isSet 
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : "bg-amber-50 text-amber-700 border border-amber-200"
-                            }`}>
-                              {grp.isSet ? "🔒 잠금 중" : "⚪ 미설정"}
-                            </span>
-                          </div>
-
-                          <div className="my-2 bg-slate-50 rounded-xl p-2.5 text-center border border-slate-200/70">
-                            <span className="text-[10px] text-slate-400 font-bold block mb-0.5">현재 모둠 비밀번호</span>
-                            <span className="text-base font-black font-mono tracking-widest text-indigo-600">
-                              {grp.isSet ? grp.passcode : "미등록 (자유 입장)"}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* 선생님 직접 설정 입력란 */}
-                        <div className="mt-3 pt-3 border-t border-slate-150 space-y-2">
-                          <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">
-                            선생님 지정 새 비밀번호
-                          </label>
-                          <div className="flex gap-1.5">
-                            <input
-                              type="text"
-                              maxLength={10}
-                              placeholder="4자리 (예: 1111)"
-                              value={teacherPasscodeInputs[grp.groupName] || ""}
-                              onChange={(e) => setTeacherPasscodeInputs(prev => ({
-                                ...prev,
-                                [grp.groupName]: e.target.value
-                              }))}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleTeacherSetGroupPasscode(grp.groupName);
-                              }}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-center text-xs font-black tracking-wider focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
-                            />
-                            <button
-                              onClick={() => handleTeacherSetGroupPasscode(grp.groupName)}
-                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-extrabold transition shrink-0 cursor-pointer shadow-2xs"
-                            >
-                              저장
-                            </button>
-                          </div>
-
-                          {grp.isSet && (
-                            <button
-                              onClick={() => handleTeacherResetGroupPasscode(grp.groupName)}
-                              className="w-full py-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
-                            >
-                              <span>비밀번호 초기화 (미등록으로 되돌리기)</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
 
                 <div className="flex gap-2 shrink-0 flex-wrap">
