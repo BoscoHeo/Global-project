@@ -5405,24 +5405,33 @@ ${clausesCombined}`
                           </span>
                         </div>
 
-                        <div className="my-2.5 bg-slate-50 rounded-xl p-3 text-center border border-slate-200/80">
-                          <span className="text-[10px] text-slate-400 font-bold block mb-1">현재 적용된 비밀번호</span>
-                          <span className="text-lg font-black font-mono tracking-widest text-indigo-600">
-                            {grp.isSet ? grp.passcode : "미등록 (자유 입장)"}
-                          </span>
+                        <div className="my-3 bg-white rounded-xl p-3 text-center border-2 border-indigo-100 shadow-inner">
+                          <span className="text-[11px] text-slate-500 font-bold block mb-1 whitespace-nowrap">현재 적용된 모둠 비밀번호</span>
+                          {grp.isSet ? (
+                            <div className="inline-flex items-center justify-center gap-2 bg-indigo-50 border border-indigo-200 px-4 py-1.5 rounded-xl">
+                              <Lock className="w-4 h-4 text-indigo-600 shrink-0" />
+                              <span className="text-xl font-black font-mono tracking-widest text-indigo-700 whitespace-nowrap">
+                                {grp.passcode}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-lg inline-block whitespace-nowrap">
+                              미등록 (자유 입장)
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       {/* 선생님 직접 설정 입력란 */}
                       <div className="mt-3 pt-3 border-t border-slate-150 space-y-2">
-                        <label className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider block">
+                        <label className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider block whitespace-nowrap">
                           선생님 지정 새 비밀번호
                         </label>
-                        <div className="flex gap-1.5">
+                        <div className="flex gap-2">
                           <input
                             type="text"
                             maxLength={10}
-                            placeholder="4자리 입력 (예: 1111)"
+                            placeholder="새 비번 (예: 1111)"
                             value={teacherPasscodeInputs[grp.groupName] || ""}
                             onChange={(e) => setTeacherPasscodeInputs(prev => ({
                               ...prev,
@@ -5431,11 +5440,11 @@ ${clausesCombined}`
                             onKeyDown={(e) => {
                               if (e.key === "Enter") handleTeacherSetGroupPasscode(grp.groupName);
                             }}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-center text-xs font-black tracking-wider focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+                            className="w-full bg-white border-2 border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-center text-sm font-black tracking-wider text-slate-900 focus:outline-none transition shadow-2xs"
                           />
                           <button
                             onClick={() => handleTeacherSetGroupPasscode(grp.groupName)}
-                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-extrabold transition shrink-0 cursor-pointer shadow-2xs"
+                            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shrink-0 cursor-pointer shadow-xs whitespace-nowrap"
                           >
                             저장
                           </button>
@@ -5444,9 +5453,9 @@ ${clausesCombined}`
                         {grp.isSet && (
                           <button
                             onClick={() => handleTeacherResetGroupPasscode(grp.groupName)}
-                            className="w-full py-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                            className="w-full py-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg text-[10.5px] font-bold transition flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap"
                           >
-                            <span>비밀번호 초기화 (미등록으로 되돌리기)</span>
+                            <span>비밀번호 초기화 (미등록으로)</span>
                           </button>
                         )}
                       </div>
