@@ -31,9 +31,13 @@ import {
   CheckCircle2,
   Bell,
   Copy,
-  Save
+  Save,
+  ShoppingCart,
+  ExternalLink,
+  FileSpreadsheet,
+  Check
 } from "lucide-react";
-import { EvaluationLevel, TopicType, StoryboardScene, CountryInfo, StampData, GroupMember, OfflineBoothPlan, GroupWorkspaceData } from "./types";
+import { EvaluationLevel, TopicType, StoryboardScene, CountryInfo, StampData, GroupMember, OfflineBoothPlan, GroupWorkspaceData, BoothMaterialItem, OpenMarketType } from "./types";
 
 // Pre-seeded rich world culture data for academic research & quizzes (13~18차시)
 // Each of the 6 continents contains at least 4 detailed sample countries for classroom assignments
@@ -1782,6 +1786,20 @@ export default function App() {
   });
   const [signedOath, setSignedOath] = useState<boolean>(false);
 
+  // Tab 5 States: Booth Materials & Budget Planner (구글 스프레드시트 연동)
+  const [boothMaterials, setBoothMaterials] = useState<BoothMaterialItem[]>([]);
+  const [activityIntro, setActivityIntro] = useState<string>("");
+  const [materialMarket, setMaterialMarket] = useState<OpenMarketType>("아이스크림몰");
+  const [materialName, setMaterialName] = useState<string>("");
+  const [materialUnit, setMaterialUnit] = useState<string>("개");
+  const [materialQuantity, setMaterialQuantity] = useState<number>(1);
+  const [materialUnitPrice, setMaterialUnitPrice] = useState<number>(0);
+  const [materialUrl, setMaterialUrl] = useState<string>("");
+  const [materialNote, setMaterialNote] = useState<string>("");
+  const [copyFeedbackToast, setCopyFeedbackToast] = useState<string>("");
+  const [summaryClassMaterials, setSummaryClassMaterials] = useState<any[]>([]);
+  const [loadingMaterialsSummary, setLoadingMaterialsSummary] = useState<boolean>(false);
+
   // Persistent LocalStorage Auto-Save & Auto-Restore for offline & server restart resilience
   useEffect(() => {
     try {
@@ -1820,6 +1838,12 @@ export default function App() {
 
       const savedVid = localStorage.getItem("expo_videoUrl");
       if (savedVid) setVideoUrl(savedVid);
+
+      const savedMat = localStorage.getItem("expo_boothMaterials");
+      if (savedMat) setBoothMaterials(JSON.parse(savedMat));
+
+      const savedIntro = localStorage.getItem("expo_activityIntro");
+      if (savedIntro) setActivityIntro(savedIntro);
     } catch (e) {
       console.error("Failed to restore from localStorage:", e);
     }
@@ -1839,10 +1863,12 @@ export default function App() {
       localStorage.setItem("expo_citizenOath", JSON.stringify(citizenOath));
       localStorage.setItem("expo_signedOath", JSON.stringify(signedOath));
       localStorage.setItem("expo_videoUrl", videoUrl);
+      localStorage.setItem("expo_boothMaterials", JSON.stringify(boothMaterials));
+      localStorage.setItem("expo_activityIntro", activityIntro);
     } catch (e) {
       console.error("Failed to save to localStorage:", e);
     }
-  }, [groupName, groupMembers, storyboard, boothPlan, userPassportStamps, studentResearch, resolution, operativeClauses, campaignInput, citizenOath, signedOath, videoUrl]);
+  }, [groupName, groupMembers, storyboard, boothPlan, userPassportStamps, studentResearch, resolution, operativeClauses, campaignInput, citizenOath, signedOath, videoUrl, boothMaterials, activityIntro]);
 
   // ==============================================================
   // 👥 [모둠 실시간 협업 & 클라우드 공유 비즈니스 로직]
@@ -1870,6 +1896,8 @@ export default function App() {
         citizenOath,
         signedOath,
         videoUrl,
+        materials: boothMaterials,
+        activityIntro,
         updatedAt: new Date().toISOString(),
         lastAuthor: author
       };
@@ -1887,7 +1915,7 @@ export default function App() {
         setLastSavedTimestamp(data.updatedAt);
         setRemoteUpdateAvailable(false);
         if (!silent) {
-          alert(`☁️ [모둠 클라우드 저장 완료!]\n\n'${groupName}' 모둠의 최신 대본, 부스 계획, 탐구 내용이 안전하게 저장되었습니다.\n같은 모둠 친구들도 실시간으로 함께 공유할 수 있습니다!`);
+          alert(`☁️ [모둠 클라우드 저장 완료!]\n\n'${groupName}' 모둠의 최신 대본, 부스 계획, 탐구 내용, 준비물 목록이 안전하게 저장되었습니다.\n같은 모둠 친구들도 실시간으로 함께 공유할 수 있습니다!`);
         }
       }
     } catch (err) {
@@ -1931,6 +1959,8 @@ export default function App() {
           if (typeof d.signedOath === "boolean") setSignedOath(d.signedOath);
           if (d.videoUrl !== undefined) setVideoUrl(d.videoUrl);
           if (Array.isArray(d.userPassportStamps)) setUserPassportStamps(d.userPassportStamps);
+          if (Array.isArray(d.materials)) setBoothMaterials(d.materials);
+          if (typeof d.activityIntro === "string") setActivityIntro(d.activityIntro);
 
           // 탐구 국가 선택 복원
           if (d.selectedCountryCode) {
@@ -1957,6 +1987,161 @@ export default function App() {
       }
     } finally {
       setIsSyncLoading(false);
+    }
+  };
+
+  // ==============================================================
+  // 📋 [부스 준비물 & 예산 신청 비즈니스 로직 - 구글 스프레드시트 연동]
+  // ==============================================================
+
+  // 1. 단일 아이템 구글 스프레드시트용 탭(\t) 구분 복사 (1행 전체가 7개 셀에 쏙 들어감)
+  const copyItemToClipboard = (item: BoothMaterialItem) => {
+    try {
+      // 스프레드시트 컬럼: 내용 \t 단위 \t 수량 \t 예상단가 \t 예상금액 \t 링크 \t 비고
+      const rowTsv = `${item.name}\t${item.unit}\t${item.quantity}\t${item.unitPrice}\t${item.totalPrice}\t${item.url}\t${item.note}`;
+      navigator.clipboard.writeText(rowTsv);
+      setCopyFeedbackToast(`📋 '${item.name}' 항목이 복사되었습니다! 구글 시트의 [내용] 칸에 커서를 두고 Ctrl+V 를 누르세요.`);
+      setTimeout(() => setCopyFeedbackToast(""), 4000);
+    } catch (err) {
+      console.error("Clipboard copy failed:", err);
+      prompt("스프레드시트용 텍스트를 수동으로 복사하세요 (Ctrl+C):", `${item.name}\t${item.unit}\t${item.quantity}\t${item.unitPrice}\t${item.totalPrice}\t${item.url}\t${item.note}`);
+    }
+  };
+
+  // 2. 모둠 전체 준비물 일괄 복사 (여러 행이 줄바꿈으로 한 번에 들어감)
+  const copyAllMaterialsToClipboard = (customList?: BoothMaterialItem[], label?: string) => {
+    const list = customList || boothMaterials;
+    if (list.length === 0) {
+      alert("복사할 준비물 품목이 없습니다. 먼저 아이템을 등록해 주세요!");
+      return;
+    }
+    try {
+      // 각 행을 탭으로 구분하고, 행끼리는 줄바꿈(\n)으로 연결
+      const allRowsTsv = list.map(item => 
+        `${item.name}\t${item.unit}\t${item.quantity}\t${item.unitPrice}\t${item.totalPrice}\t${item.url}\t${item.note}`
+      ).join("\n");
+
+      navigator.clipboard.writeText(allRowsTsv);
+      const title = label || `'${groupName}' 모둠 전체 준비물 ${list.length}건`;
+      setCopyFeedbackToast(`✨ [${title}] 복사 완료! 구글 시트에서 붙여넣을 첫 번째 칸(내용)을 클릭하고 Ctrl+V 를 누르면 여러 줄이 한 번에 채워집니다.`);
+      setTimeout(() => setCopyFeedbackToast(""), 5000);
+    } catch (err) {
+      console.error("Clipboard copy failed:", err);
+      alert("클립보드 복사 권한이 필요합니다.");
+    }
+  };
+
+  // 3. 신규 준비물 아이템 추가 핸들러 (옵션: 등록과 동시에 시트 복사)
+  const handleAddMaterial = (copyImmediately: boolean = false) => {
+    if (!materialName.trim()) {
+      alert("준비물 '내용(물품명)'을 입력해 주세요!");
+      return;
+    }
+    const qty = Math.max(1, Number(materialQuantity) || 1);
+    const unitP = Math.max(0, Number(materialUnitPrice) || 0);
+    const totalP = qty * unitP;
+
+    const newItem: BoothMaterialItem = {
+      id: `mat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      market: materialMarket,
+      name: materialName.trim(),
+      unit: materialUnit.trim() || "개",
+      quantity: qty,
+      unitPrice: unitP,
+      totalPrice: totalP,
+      url: materialUrl.trim(),
+      note: materialNote.trim(),
+      createdAt: new Date().toISOString()
+    };
+
+    const updated = [...boothMaterials, newItem];
+    setBoothMaterials(updated);
+
+    // 즉시 시트 복사 요청인 경우
+    if (copyImmediately) {
+      copyItemToClipboard(newItem);
+    }
+
+    // 입력 폼 초기화 (마켓 선택은 편리성을 위해 유지)
+    setMaterialName("");
+    setMaterialQuantity(1);
+    setMaterialUnitPrice(0);
+    setMaterialUrl("");
+    setMaterialNote("");
+
+    // 로컬 즉시 저장
+    try {
+      localStorage.setItem("expo_boothMaterials", JSON.stringify(updated));
+    } catch (e) {}
+
+    // 자동 클라우드 백그라운드 동기화
+    setTimeout(() => {
+      saveToGroupCloud(myAuthorName, true);
+    }, 300);
+  };
+
+  // 4. 준비물 아이템 삭제
+  const handleDeleteMaterial = (id: string) => {
+    const target = boothMaterials.find(m => m.id === id);
+    if (!window.confirm(`'${target?.name || "선택한 품목"}' 준비물을 삭제하시겠습니까?`)) return;
+
+    const updated = boothMaterials.filter(m => m.id !== id);
+    setBoothMaterials(updated);
+    try {
+      localStorage.setItem("expo_boothMaterials", JSON.stringify(updated));
+    } catch (e) {}
+    setTimeout(() => {
+      saveToGroupCloud(myAuthorName, true);
+    }, 300);
+  };
+
+  // 5. 준비물 목록 엑셀(CSV) 다운로드 함수 (UTF-8 BOM 지원)
+  const downloadMaterialsCSV = (listToExport?: BoothMaterialItem[], customTitle?: string) => {
+    const list = listToExport || boothMaterials;
+    if (list.length === 0) {
+      alert("다운로드할 준비물 내역이 없습니다.");
+      return;
+    }
+
+    const headers = ["모둠명", "오픈마켓", "내용(물품명)", "단위", "수량", "예상단가(원)", "예상금액(원)", "구매링크", "비고"];
+    const rows = list.map(item => [
+      `"${groupName}"`,
+      `"${item.market}"`,
+      `"${item.name.replace(/"/g, '""')}"`,
+      `"${item.unit.replace(/"/g, '""')}"`,
+      item.quantity,
+      item.unitPrice,
+      item.totalPrice,
+      `"${item.url.replace(/"/g, '""')}"`,
+      `"${item.note.replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${customTitle || `${classCode}_${groupName}_준비물신청목록`}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // 6. 교사용 전체 모둠 준비물 현황 불러오기
+  const fetchMaterialsSummary = async () => {
+    setLoadingMaterialsSummary(true);
+    try {
+      const res = await fetch(`/api/materials/summary?classCode=${encodeURIComponent(classCode)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          setSummaryClassMaterials(json.data);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch materials summary:", err);
+    } finally {
+      setLoadingMaterialsSummary(false);
     }
   };
 
@@ -3350,6 +3535,15 @@ ${clausesCombined}`
                 <Award className={`w-4 h-4 ${activeTab === "campaign" ? "text-indigo-600" : "text-slate-400"}`} />
                 <span>캠페인 & 세계인 실천 선서</span>
                 <span className="ml-auto text-[9px] bg-slate-100 text-slate-500 px-1 py-0.2 rounded font-mono">28~32C</span>
+              </button>
+
+              <button 
+                onClick={() => setActiveTab("materials")}
+                className={`w-full flex items-center gap-3 p-2.5 rounded-lg text-xs font-semibold transition text-left ${activeTab === "materials" ? "bg-amber-50 border-l-3 border-amber-600 text-amber-900 font-bold shadow-xs" : "text-slate-600 hover:bg-slate-50"}`}
+              >
+                <ShoppingCart className={`w-4 h-4 ${activeTab === "materials" ? "text-amber-600" : "text-slate-400"}`} />
+                <span>부스 준비물 & 예산 신청</span>
+                <span className="ml-auto text-[9px] bg-amber-100 text-amber-800 px-1 py-0.2 rounded font-mono font-bold">12~14C</span>
               </button>
 
               {/* Teacher Hub Separator & Button */}
@@ -5462,6 +5656,542 @@ ${clausesCombined}`
                     </div>
                   ))}
                 </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* Active Tab: Booth Materials & Budget Planner (구글 스프레드시트 연동) */}
+          {activeTab === "materials" && (
+            <div className="flex flex-col gap-6 animate-fade-in text-left">
+              
+              {/* Floating Copy Feedback Toast */}
+              {copyFeedbackToast && (
+                <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-700 animate-bounce">
+                  <span className="text-emerald-400 text-lg">📋</span>
+                  <div className="text-xs font-bold">{copyFeedbackToast}</div>
+                  <button 
+                    onClick={() => setCopyFeedbackToast("")} 
+                    className="ml-2 text-slate-400 hover:text-white text-xs cursor-pointer font-black"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Header Banner */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+                <div>
+                  <div className="text-xs font-bold text-amber-600 mb-1 flex items-center gap-1.5">
+                    <ShoppingCart className="w-4 h-4 text-amber-600" /> 3단계 실습: 12~14차시 체험부스 준비물 구입 품의 & 예산 신청
+                  </div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">체험부스 준비물 & 예산 신청함</h2>
+                  <p className="text-slate-500 text-xs">
+                    오픈마켓(아이스크림몰, 11번가, G마켓)에서 필요한 준비물을 고르고, 구글 스프레드시트 양식으로 원클릭 복사하세요.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => copyAllMaterialsToClipboard()}
+                    className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    title="우리 모둠의 모든 준비물을 구글 시트에 한 번에 붙여넣을 수 있도록 복사합니다."
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>모둠 전체 시트 복사</span>
+                  </button>
+
+                  <button
+                    onClick={() => downloadMaterialsCSV()}
+                    className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    title="엑셀(CSV) 파일로 다운로드합니다."
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>엑셀(CSV) 다운로드</span>
+                  </button>
+
+                  <button
+                    onClick={() => saveToGroupCloud(myAuthorName)}
+                    disabled={isSyncSaving}
+                    className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSyncSaving ? "저장 중..." : "클라우드 저장"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Group Selector & 350,000 KRW Budget Progress Gauge */}
+              {(() => {
+                const groupTotal = boothMaterials.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+                const classBudgetLimit = 350000; // 반별 35만원 한도
+                const percent = Math.min(100, Math.round((groupTotal / classBudgetLimit) * 100));
+                const remaining = classBudgetLimit - groupTotal;
+                const isOver = remaining < 0;
+
+                return (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Active Group Info Card */}
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4.5 shadow-xs space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-500">현재 작성 모둠</span>
+                        <span className="text-[11px] font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
+                          {classCode || "6-1"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">🎪</span>
+                          <div>
+                            <div className="text-lg font-black text-slate-900">{groupName || "1모둠"}</div>
+                            <div className="text-[11px] text-slate-500 font-medium">
+                              {selectedCountry ? `${selectedCountry.flag} ${selectedCountry.name}` : "국가 미지정"}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => loadFromGroupCloud(true)}
+                          className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-lg transition"
+                        >
+                          <RefreshCw className="w-3 h-3" /> 최신 동기화
+                        </button>
+                      </div>
+
+                      {/* Quick Group Switcher */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <span className="text-[10px] text-slate-400 font-bold block mb-1.5">모둠 전환:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {["1모둠", "2모둠", "3모둠", "4모둠", "5모둠", "6모둠"].map((g) => (
+                            <button
+                              key={g}
+                              onClick={() => {
+                                setGroupName(g);
+                                localStorage.setItem("expo_groupName", g);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                                groupName === g
+                                  ? "bg-indigo-600 text-white shadow-xs"
+                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                              }`}
+                            >
+                              {g}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Class Budget Gauge Card (35만원 한도) */}
+                    <div className="lg:col-span-2 bg-gradient-to-br from-amber-50/70 via-white to-indigo-50/50 border border-amber-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">💰</span>
+                          <div>
+                            <h4 className="text-sm font-black text-slate-900">학급 지원 예산 사용 현황 (반별 35만원)</h4>
+                            <p className="text-[11px] text-slate-500">6학년 프로젝트비 및 진로체험비 지원금 (9월 10일까지 마감)</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className={`text-xs font-black px-2.5 py-1 rounded-full ${
+                            isOver 
+                              ? "bg-rose-100 text-rose-700 border border-rose-200"
+                              : percent > 85 
+                                ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                          }`}>
+                            {isOver ? "⚠️ 예산 초과" : `${percent}% 사용`}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Amounts Display */}
+                      <div className="grid grid-cols-3 gap-2 my-2 bg-white/80 p-3 rounded-xl border border-slate-100 text-center">
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400">우리 모둠 신청 총액</div>
+                          <div className="text-base font-black text-indigo-700">{groupTotal.toLocaleString()}원</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400">반 전체 한도 예산</div>
+                          <div className="text-base font-black text-slate-700">{classBudgetLimit.toLocaleString()}원</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400">잔여 가능 예산</div>
+                          <div className={`text-base font-black ${isOver ? "text-rose-600" : "text-emerald-600"}`}>
+                            {isOver ? `-${Math.abs(remaining).toLocaleString()}원 (초과)` : `${remaining.toLocaleString()}원 남음`}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="space-y-1 mt-1">
+                        <div className="w-full bg-slate-200 h-3 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full transition-all duration-500 ${
+                              isOver ? "bg-rose-500" : percent > 85 ? "bg-amber-500" : "bg-emerald-500"
+                            }`}
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[10px] text-slate-400 font-medium">
+                          <span>0원</span>
+                          <span>반별 350,000원 한도</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 🎪 모둠별 체험 활동 간단 설명 (구글 스프레드시트 양식 상단 연동) */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4.5 shadow-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📢</span>
+                    <h4 className="text-xs font-black text-slate-900">모둠별 체험 활동 간단 설명 (시트 양식)</h4>
+                  </div>
+                  <span className="text-[10px] text-slate-400">예: "나라소개 ➡️ 전통 퀴즈 ➡️ 보드게임"</span>
+                </div>
+                <input
+                  type="text"
+                  value={activityIntro}
+                  onChange={(e) => setActivityIntro(e.target.value)}
+                  onBlur={() => saveToGroupCloud(myAuthorName, true)}
+                  placeholder="예) 나라소개를 진행한 다음으로 넘어가 게임을 진행하고 스탬프를 증정합니다."
+                  className="w-full text-xs font-medium px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-indigo-500 transition"
+                />
+              </div>
+
+              {/* 🛒 새 준비물 품목 추가 폼 (구글 시트 컬럼 양식 완벽 반영) */}
+              <div className="bg-white border-2 border-indigo-200 rounded-2xl p-5 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🛍️</span>
+                    <div>
+                      <h3 className="text-sm font-black text-indigo-950">새 준비물 품목 추가하기 (오픈마켓 양식)</h3>
+                      <p className="text-[11px] text-slate-500">
+                        아래 정보를 입력한 후 <span className="font-bold text-indigo-600">[등록 및 시트 복사]</span>를 누르면 스프레드시트에 바로 붙여넣기(Ctrl+V)할 수 있습니다.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Open Market Visual Pill */}
+                  <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                    <span className="text-[10px] font-bold text-slate-400">선택 마켓:</span>
+                    <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full border ${
+                      materialMarket === "아이스크림몰" 
+                        ? "bg-amber-100 text-amber-900 border-amber-300"
+                        : materialMarket === "11번가"
+                          ? "bg-rose-100 text-rose-900 border-rose-300"
+                          : materialMarket === "지마켓"
+                            ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                            : "bg-slate-100 text-slate-800 border-slate-300"
+                    }`}>
+                      {materialMarket}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Form Fields Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                  
+                  {/* 1. 오픈마켓 드롭다운 (핵심 요청) */}
+                  <div className="lg:col-span-1 space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                      <span>오픈마켓</span>
+                      <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={materialMarket}
+                      onChange={(e) => setMaterialMarket(e.target.value as OpenMarketType)}
+                      className="w-full text-xs font-bold px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:border-indigo-500 transition cursor-pointer"
+                    >
+                      <option value="아이스크림몰">🍦 아이스크림몰</option>
+                      <option value="11번가">🔴 11번가</option>
+                      <option value="지마켓">🟢 지마켓</option>
+                      <option value="기타">📦 기타 / 직접입력</option>
+                    </select>
+                  </div>
+
+                  {/* 2. 내용 (물품명) */}
+                  <div className="lg:col-span-2 space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                      <span>내용 (물품명)</span>
+                      <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={materialName}
+                      onChange={(e) => setMaterialName(e.target.value)}
+                      placeholder="예) 남아공 국기, 마테차, 미니 나무 숟가락"
+                      className="w-full text-xs font-medium px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:border-indigo-500 transition"
+                    />
+                  </div>
+
+                  {/* 3. 단위 (규격) */}
+                  <div className="lg:col-span-1 space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700">단위 / 규격</label>
+                    <input
+                      type="text"
+                      value={materialUnit}
+                      onChange={(e) => setMaterialUnit(e.target.value)}
+                      placeholder="예) 1kg, 낱개, 100pcs, 세트"
+                      className="w-full text-xs font-medium px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:border-indigo-500 transition"
+                    />
+                  </div>
+
+                  {/* 4. 수량 */}
+                  <div className="lg:col-span-1 space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                      <span>수량</span>
+                      <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={materialQuantity}
+                      onChange={(e) => setMaterialQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full text-xs font-bold px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:border-indigo-500 transition text-right"
+                    />
+                  </div>
+
+                  {/* 5. 예상단가 */}
+                  <div className="lg:col-span-1 space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                      <span>예상단가 (원)</span>
+                      <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={materialUnitPrice || ""}
+                      onChange={(e) => setMaterialUnitPrice(Math.max(0, parseInt(e.target.value) || 0))}
+                      placeholder="예) 13000"
+                      className="w-full text-xs font-bold px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:border-indigo-500 transition text-right"
+                    />
+                  </div>
+
+                  {/* 6. 예상금액 (수량 x 단가 자동 계산) */}
+                  <div className="lg:col-span-2 space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700">예상금액 (수량 × 단가 자동계산)</label>
+                    <div className="w-full text-xs font-black px-3.5 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl flex items-center justify-between">
+                      <span className="text-[10px] text-indigo-500 font-medium">자동 합계:</span>
+                      <span className="text-sm font-black">
+                        {((Math.max(1, materialQuantity) * Math.max(0, materialUnitPrice))).toLocaleString()} 원
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 7. 링크 (구매 URL) */}
+                  <div className="lg:col-span-2 space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                      <span>구매 링크 (URL)</span>
+                      {materialUrl && (
+                        <a 
+                          href={materialUrl.startsWith("http") ? materialUrl : `https://${materialUrl}`}
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="text-[10px] text-indigo-600 hover:underline flex items-center gap-0.5"
+                        >
+                          <ExternalLink className="w-2.5 h-2.5" /> 링크 시험 열기
+                        </a>
+                      )}
+                    </label>
+                    <input
+                      type="url"
+                      value={materialUrl}
+                      onChange={(e) => setMaterialUrl(e.target.value)}
+                      placeholder="https://item.gmarket.co.kr/... 또는 아이스크림몰 링크"
+                      className="w-full text-xs font-medium px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:border-indigo-500 transition"
+                    />
+                  </div>
+
+                  {/* 8. 비고 (택배비 등) */}
+                  <div className="lg:col-span-2 space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                      <span>비고 (택배비, 옵션 등)</span>
+                      <span className="text-[10px] text-amber-600">택배비 발생 시 기재</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={materialNote}
+                      onChange={(e) => setMaterialNote(e.target.value)}
+                      placeholder="예) 택배비 3,000원 별도 발생, 빨간색 옵션 선택"
+                      className="w-full text-xs font-medium px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:border-indigo-500 transition"
+                    />
+                  </div>
+
+                </div>
+
+                {/* Form Action Buttons */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-indigo-100">
+                  <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                    <span className="text-indigo-600 font-bold">💡 꿀팁:</span>
+                    <span>
+                      <strong>[등록 및 시트 복사]</strong>를 누르면 구글 스프레드시트의 7개 열에 딱 맞게 한 번에 붙여넣기(Ctrl+V)할 수 있습니다.
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => handleAddMaterial(false)}
+                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>준비물 등록</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleAddMaterial(true)}
+                      className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5 hover:scale-102"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>등록 및 시트 복사 (Ctrl+V용)</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 📋 등록된 준비물 목록 테이블 & 관리 */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">📦</span>
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900">
+                        {groupName} 준비물 신청 내역 ({boothMaterials.length}건)
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        각 항목별 [📋 시트 복사] 버튼을 누르면 해당 행만 구글 시트로 복사할 수 있습니다.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-600">
+                      모둠 신청 합계: <span className="text-indigo-700 font-black text-sm">{boothMaterials.reduce((s, m) => s + m.totalPrice, 0).toLocaleString()}원</span>
+                    </span>
+                  </div>
+                </div>
+
+                {boothMaterials.length === 0 ? (
+                  <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 space-y-2">
+                    <span className="text-3xl">🛒</span>
+                    <div className="text-xs font-bold text-slate-600">아직 등록된 준비물이 없습니다.</div>
+                    <p className="text-[11px] text-slate-400 max-w-md mx-auto">
+                      위의 입력 양식에서 오픈마켓을 선택하고 필요한 물품명과 단가를 입력하여 첫 번째 준비물을 등록해 보세요!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100/80 border-b border-slate-200 text-[11px] text-slate-600 font-bold">
+                          <th className="py-2.5 px-3">마켓</th>
+                          <th className="py-2.5 px-3 min-w-[140px]">내용 (물품명)</th>
+                          <th className="py-2.5 px-3 text-center">단위</th>
+                          <th className="py-2.5 px-3 text-right">수량</th>
+                          <th className="py-2.5 px-3 text-right">예상단가</th>
+                          <th className="py-2.5 px-3 text-right">예상금액</th>
+                          <th className="py-2.5 px-3 text-center">구매링크</th>
+                          <th className="py-2.5 px-3 min-w-[120px]">비고</th>
+                          <th className="py-2.5 px-3 text-center">작업</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {boothMaterials.map((item, idx) => (
+                          <tr key={item.id} className="hover:bg-slate-50/80 transition">
+                            {/* 오픈마켓 배지 */}
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                                item.market === "아이스크림몰"
+                                  ? "bg-amber-100 text-amber-900 border-amber-200"
+                                  : item.market === "11번가"
+                                    ? "bg-rose-100 text-rose-900 border-rose-200"
+                                    : item.market === "지마켓"
+                                      ? "bg-emerald-100 text-emerald-900 border-emerald-200"
+                                      : "bg-slate-100 text-slate-700 border-slate-200"
+                              }`}>
+                                {item.market}
+                              </span>
+                            </td>
+
+                            {/* 물품명 */}
+                            <td className="py-3 px-3 font-bold text-slate-900">
+                              {item.name}
+                            </td>
+
+                            {/* 단위 */}
+                            <td className="py-3 px-3 text-center text-slate-600 font-medium">
+                              {item.unit || "개"}
+                            </td>
+
+                            {/* 수량 */}
+                            <td className="py-3 px-3 text-right font-black text-slate-900 font-mono">
+                              {item.quantity}
+                            </td>
+
+                            {/* 예상단가 */}
+                            <td className="py-3 px-3 text-right text-slate-600 font-mono">
+                              {item.unitPrice.toLocaleString()}원
+                            </td>
+
+                            {/* 예상금액 */}
+                            <td className="py-3 px-3 text-right font-black text-indigo-700 font-mono">
+                              {item.totalPrice.toLocaleString()}원
+                            </td>
+
+                            {/* 구매링크 */}
+                            <td className="py-3 px-3 text-center">
+                              {item.url ? (
+                                <a
+                                  href={item.url.startsWith("http") ? item.url : `https://${item.url}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-[10.5px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition"
+                                >
+                                  <ExternalLink className="w-3 h-3" /> 열기
+                                </a>
+                              ) : (
+                                <span className="text-[10px] text-slate-300">-</span>
+                              )}
+                            </td>
+
+                            {/* 비고 */}
+                            <td className="py-3 px-3 text-[11px] text-slate-500">
+                              {item.note || "-"}
+                            </td>
+
+                            {/* 작업 (복사 및 삭제) */}
+                            <td className="py-3 px-3 text-center whitespace-nowrap">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => copyItemToClipboard(item)}
+                                  className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-[10.5px] font-bold transition flex items-center gap-0.5 cursor-pointer"
+                                  title="구글 시트용 탭 구분 1행 복사 (Ctrl+V)"
+                                >
+                                  <Copy className="w-2.5 h-2.5" />
+                                  <span>시트 복사</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteMaterial(item.id)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                  title="삭제"
+                                >
+                                  <Trash className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
             </div>

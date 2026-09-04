@@ -154,7 +154,29 @@ export interface GroupWorkspaceData {
   };
   signedOath: boolean;
   videoUrl: string;
+  materials?: BoothMaterialItem[];
+  activityIntro?: string;
   updatedAt: string;
   lastAuthor?: string;
 }
 
+/**
+ * 준비물 신청 오픈마켓 타입
+ */
+export type OpenMarketType = "아이스크림몰" | "11번가" | "지마켓" | "기타";
+
+/**
+ * 부스 준비물 및 예산 신청 품목 데이터 모델 (구글 스프레드시트 양식 연동)
+ */
+export interface BoothMaterialItem {
+  id: string; // 품목 고유 식별자
+  market: OpenMarketType; // 오픈마켓 드롭다운 선택
+  name: string; // 내용 (물품명)
+  unit: string; // 단위 (규격: 1kg, 낱개, 100pcs 등)
+  quantity: number; // 수량
+  unitPrice: number; // 예상 단가 (원)
+  totalPrice: number; // 예상 금액 (수량 * 단가 자동 계산)
+  url: string; // 구매 링크 URL
+  note: string; // 비고 (택배비 포함 여부, 옵션 등)
+  createdAt: string; // 등록 일시
+}

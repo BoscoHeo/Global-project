@@ -1042,6 +1042,47 @@ app.get("/api/group/sync/status", (req, res) => {
   });
 });
 
+// 4. 학급별 / 전체 모둠 준비물 및 예산 요약 조회 API (선생님 수합 및 엑셀 다운로드용)
+app.get("/api/materials/summary", async (req, res) => {
+  try {
+    const classCodeVal = String(req.query.classCode || "").trim();
+    const resultList: any[] = [];
+
+    // Firestore에서 최신 모둠 데이터 보충
+    if (db) {
+      try {
+        const snapshot = await getDocs(collection(db, "classroom_groups"));
+        snapshot.docs.forEach(d => {
+          classroomGroupWorkspaces.set(d.id, d.data());
+        });
+      } catch (dbErr) {
+        console.error("[Materials Summary] Firestore fetch error:", dbErr);
+      }
+    }
+
+    // 인메모리 맵 순회
+    classroomGroupWorkspaces.forEach((data, key) => {
+      const matchClass = !classCodeVal || data.classCode === classCodeVal || key.startsWith(`${classCodeVal}_`);
+      if (matchClass) {
+        resultList.push({
+          groupKey: key,
+          classCode: data.classCode,
+          groupName: data.groupName,
+          selectedCountryName: data.selectedCountryName || "",
+          activityIntro: data.activityIntro || "",
+          materials: Array.isArray(data.materials) ? data.materials : [],
+          updatedAt: data.updatedAt
+        });
+      }
+    });
+
+    return res.json({ success: true, count: resultList.length, data: resultList });
+  } catch (error: any) {
+    console.error("[Materials Summary] Error:", error);
+    return res.status(500).json({ error: "준비물 요약 조회 중 오류가 발생했습니다." });
+  }
+});
+
 // ==========================================
 // [모둠별 비밀번호(PIN) 잠금 & 보안 관리 API]
 // 다른 모둠 친구가 몰래 들어와 대본을 보거나 수정하지 못하도록 4자리 비밀번호로 잠급니다.
