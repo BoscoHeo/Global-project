@@ -1900,6 +1900,80 @@ export default function App() {
     }
   }, [isChatOpen, chatMessages.length]);
 
+  // ==============================================================
+  // 🔗 [채팅 메시지 내 URL 자동 하이퍼링크 변환 헬퍼]
+  // 학생들이 나눈 대화 중 http:// 또는 https:// 웹사이트 링크를 클릭 가능한 하이퍼링크로 자동 변환합니다.
+  // ==============================================================
+  const renderMessageContentWithLinks = (text: string, isMe: boolean) => {
+    if (!text) return null;
+    // URL 정규식 패턴 (http://, https:// 및 www. 로 시작하는 링크 감지)
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
+    const parts = text.split(urlRegex);
+
+    return parts.map((part, idx) => {
+      if (part.match(urlRegex)) {
+        const fullUrl = part.startsWith("http") ? part : `https://${part}`;
+        return (
+          <a
+            key={idx}
+            href={fullUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={`underline font-bold inline-flex items-center gap-0.5 break-all transition cursor-pointer mx-0.5 ${
+              isMe 
+                ? "text-amber-200 hover:text-white" 
+                : "text-indigo-600 hover:text-indigo-800"
+            }`}
+            title={`${fullUrl} (새 탭에서 열기)`}
+          >
+            <span>{part}</span>
+            <ExternalLink className="w-3 h-3 inline-block shrink-0 ml-0.5" />
+          </a>
+        );
+      }
+      return <span key={idx}>{part}</span>;
+    });
+  };
+
+  // ==============================================================
+  // 👨‍🏫 [교사 전용 모둠 대화 전체 상세 조회 State 및 핸들러]
+  // ==============================================================
+  const [teacherViewingChatGroup, setTeacherViewingChatGroup] = useState<string | null>(null);
+  const [teacherViewingChatMessages, setTeacherViewingChatMessages] = useState<GroupChatMessage[]>([]);
+  const [loadingTeacherChatView, setLoadingTeacherChatView] = useState<boolean>(false);
+
+  // 선생님이 특정 모둠의 전체 대화 기록을 모달로 열어 조회
+  const handleOpenTeacherChatViewer = async (gName: string) => {
+    setTeacherViewingChatGroup(gName);
+    setLoadingTeacherChatView(true);
+    try {
+      const res = await fetch(`/api/group/chat/messages?classCode=${encodeURIComponent(classCode)}&groupName=${encodeURIComponent(gName)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setTeacherViewingChatMessages(Array.isArray(data.messages) ? data.messages : []);
+      }
+    } catch (e) {
+      console.error("Failed to load teacher chat view:", e);
+    } finally {
+      setLoadingTeacherChatView(false);
+    }
+  };
+
+  // 모둠 대화 전체 텍스트 클립보드 복사
+  const handleCopyTeacherChatLog = () => {
+    if (!teacherViewingChatMessages || teacherViewingChatMessages.length === 0) {
+      alert("복사할 대화 기록이 없습니다.");
+      return;
+    }
+    const logText = teacherViewingChatMessages.map(m => `[${m.timeFormatted || m.timestamp}] ${m.senderName}: ${m.content}`).join("\n");
+    navigator.clipboard.writeText(`[${classCode} ${teacherViewingChatGroup} 실시간 대화 기록]\n\n${logText}`).then(() => {
+      alert(`📋 [${teacherViewingChatGroup}] 대화 내용이 클립보드에 복사되었습니다!`);
+    }).catch(() => {
+      alert("클립보드 복사에 실패했습니다.");
+    });
+  };
+
   // Tab 1 States: Storyboard Planner (1-Min Short-form Video Focus)
   const [storyboard, setStoryboard] = useState<StoryboardScene[]>([]);
   const [editSceneIndex, setEditSceneIndex] = useState<number | null>(null);
@@ -3591,6 +3665,21 @@ ${clausesCombined}`
                   className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   placeholder="모둠 이름을 명문화하세요"
                 />
+
+                {/* 💬 사이드바 모둠 실시간 대화방 열기 버튼 */}
+                <button
+                  type="button"
+                  onClick={() => setIsChatOpen(true)}
+                  className="w-full mt-2 py-2 bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 hover:from-indigo-700 hover:to-purple-800 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-150 transition flex items-center justify-center gap-1.5 cursor-pointer border border-white/20 hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-300 animate-pulse" />
+                  <span>💬 {groupName} 대화방 열기</span>
+                  {unreadChatCount > 0 && (
+                    <span className="px-1.5 py-0.2 bg-rose-500 text-white font-black text-[9px] rounded-full animate-bounce">
+                      +{unreadChatCount}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
 
@@ -3948,7 +4037,23 @@ ${clausesCombined}`
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 self-center shrink-0">
+              <div className="flex items-center gap-2 self-center shrink-0 flex-wrap">
+                {/* 💬 상단 바 모둠 대화방 바로가기 버튼 */}
+                <button
+                  type="button"
+                  onClick={() => setIsChatOpen(true)}
+                  className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 hover:from-indigo-700 hover:to-purple-800 text-white rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs border border-white/20 hover:scale-105 active:scale-95"
+                  title="모둠 친구들과 실시간 대화창 열기"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-300 animate-pulse" />
+                  <span>💬 모둠 대화방</span>
+                  {unreadChatCount > 0 && (
+                    <span className="px-1.5 py-0.2 bg-rose-500 text-white text-[9px] font-black rounded-full animate-bounce">
+                      +{unreadChatCount}
+                    </span>
+                  )}
+                </button>
+
                 <button
                   onClick={() => loadFromGroupCloud(true)}
                   disabled={isSyncLoading}
@@ -7409,20 +7514,157 @@ ${clausesCombined}`
 
                         <button
                           type="button"
-                          onClick={() => {
-                            setGroupName(gName);
-                            setIsChatOpen(true);
-                          }}
-                          className="w-full py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1 cursor-pointer border border-purple-200"
+                          onClick={() => handleOpenTeacherChatViewer(gName)}
+                          className="w-full py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-black text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs hover:scale-[1.02] active:scale-[0.98]"
                         >
                           <MessageCircle className="w-3.5 h-3.5" />
-                          <span>{gName} 대화방 열람하기</span>
+                          <span>{gName} 전체 대화 기록 상세 조회</span>
                         </button>
                       </div>
                     );
                   })}
                 </div>
               </div>
+
+              {/* 👨‍🏫 [선생님 전용 모둠 전체 대화 상세 조회 팝업 모달] */}
+              {teacherViewingChatGroup && (
+                <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in text-left">
+                  <div className="bg-white rounded-3xl max-w-2xl w-full h-[620px] max-h-[88vh] border-2 border-purple-200 shadow-2xl flex flex-col overflow-hidden animate-scale-up">
+                    
+                    {/* 모달 헤더 */}
+                    <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 text-white p-5 flex items-center justify-between shadow-md select-none">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-purple-600/80 border border-purple-400/40 flex items-center justify-center text-lg shadow-inner">
+                          💬
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm md:text-base font-black text-white">
+                              {classCode.replace('-', '학년 ')}반 • {teacherViewingChatGroup} 실시간 대화 기록
+                            </h3>
+                            <span className="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold rounded-full border border-emerald-500/30">
+                              총 {teacherViewingChatMessages.length}건
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-purple-200/80 font-medium">
+                            선생님 생활지도 및 협업 모니터링 전용 창 (공유된 웹사이트 링크는 바로 클릭 가능)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenTeacherChatViewer(teacherViewingChatGroup)}
+                          disabled={loadingTeacherChatView}
+                          className="p-2 text-purple-200 hover:text-white hover:bg-white/10 rounded-xl transition cursor-pointer"
+                          title="대화 새로고침"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${loadingTeacherChatView ? "animate-spin" : ""}`} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTeacherViewingChatGroup(null)}
+                          className="p-2 text-purple-200 hover:text-white hover:bg-white/10 rounded-xl transition cursor-pointer"
+                          title="닫기"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 모둠 빠른 전환 탭 바 */}
+                    <div className="bg-purple-50/80 px-4 py-2.5 border-b border-purple-100 flex items-center justify-between gap-2 text-xs select-none">
+                      <div className="flex items-center gap-1.5 overflow-x-auto">
+                        <span className="font-extrabold text-purple-950 text-[11px] shrink-0">모둠 선택:</span>
+                        {["1모둠", "2모둠", "3모둠", "4모둠"].map((g) => (
+                          <button
+                            key={g}
+                            type="button"
+                            onClick={() => handleOpenTeacherChatViewer(g)}
+                            className={`px-3 py-1 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 ${
+                              teacherViewingChatGroup === g
+                                ? "bg-purple-600 text-white shadow-xs"
+                                : "bg-white text-purple-900 border border-purple-200 hover:bg-purple-100"
+                            }`}
+                          >
+                            {g}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCopyTeacherChatLog}
+                        className="px-2.5 py-1 bg-white hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
+                        title="전체 대화 텍스트 복사"
+                      >
+                        <Copy className="w-3 h-3" />
+                        <span>대화 복사</span>
+                      </button>
+                    </div>
+
+                    {/* 대화 본문 스크롤 영역 */}
+                    <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 bg-slate-50/70">
+                      {loadingTeacherChatView ? (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2">
+                          <RefreshCw className="w-8 h-8 animate-spin text-purple-600" />
+                          <p className="text-xs font-bold">대화 기록을 불러오는 중입니다...</p>
+                        </div>
+                      ) : teacherViewingChatMessages.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 p-8 text-center">
+                          <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-500 flex items-center justify-center text-xl shadow-inner">
+                            💬
+                          </div>
+                          <p className="text-xs font-bold text-slate-700">아직 {teacherViewingChatGroup} 학생들이 나눈 대화가 없습니다.</p>
+                          <p className="text-[11px] text-slate-400 max-w-xs">
+                            학생들이 사이트에서 실시간 대화를 나누면 시간순으로 이곳에 모두 기록됩니다.
+                          </p>
+                        </div>
+                      ) : (
+                        teacherViewingChatMessages.map((msg, idx) => (
+                          <div
+                            key={msg.id || idx}
+                            className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-2xs space-y-1.5 hover:border-purple-200 transition"
+                          >
+                            <div className="flex items-center justify-between text-xs border-b border-slate-100 pb-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                                <span className="font-black text-slate-900">{msg.senderName}</span>
+                                <span className="text-[10px] text-purple-600 bg-purple-50 px-1.5 py-0.2 rounded font-mono">
+                                  #{idx + 1}
+                                </span>
+                              </div>
+                              <span className="text-[10.5px] text-slate-400 font-mono">
+                                {msg.timeFormatted || new Date(msg.timestamp).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}
+                              </span>
+                            </div>
+
+                            <div className="text-xs text-slate-800 leading-relaxed font-normal whitespace-pre-wrap pt-0.5">
+                              {renderMessageContentWithLinks(msg.content, false)}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* 모달 푸터 */}
+                    <div className="p-3 bg-white border-t border-slate-200 flex items-center justify-between">
+                      <span className="text-[11px] text-slate-500 font-medium">
+                        💡 파란색 링크를 누르면 학생들이 공유한 사이트나 자료를 바로 열어보실 수 있습니다.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setTeacherViewingChatGroup(null)}
+                        className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-xs"
+                      >
+                        닫기
+                      </button>
+                    </div>
+
+                  </div>
+                </div>
+              )}
 
               {/* 🛒 12~14차시 체험부스 준비물 & 예산 일괄 수합 센터 (교사 허브) */}
               <div className="bg-white border-2 border-amber-300 rounded-3xl p-6 shadow-sm space-y-5">
@@ -9271,7 +9513,7 @@ ${clausesCombined}`
                             : "bg-white text-slate-800 border border-slate-200/90 rounded-tl-xs"
                         }`}
                       >
-                        {msg.content}
+                        {renderMessageContentWithLinks(msg.content, isMe)}
                       </div>
                       <span className="text-[9px] text-slate-400 shrink-0 mb-0.5 select-none font-mono">
                         {msg.timeFormatted || new Date(msg.timestamp).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}
