@@ -1799,6 +1799,8 @@ export default function App() {
   const [copyFeedbackToast, setCopyFeedbackToast] = useState<string>("");
   const [summaryClassMaterials, setSummaryClassMaterials] = useState<any[]>([]);
   const [loadingMaterialsSummary, setLoadingMaterialsSummary] = useState<boolean>(false);
+  const [materialsSubTab, setMaterialsSubTab] = useState<"group" | "summary">("group");
+  const [materialsMarketFilter, setMaterialsMarketFilter] = useState<string>("all");
 
   // Persistent LocalStorage Auto-Save & Auto-Restore for offline & server restart resilience
   useEffect(() => {
@@ -2142,6 +2144,82 @@ export default function App() {
       console.error("Failed to fetch materials summary:", err);
     } finally {
       setLoadingMaterialsSummary(false);
+    }
+  };
+
+  // 7. 학급 전체 모둠 준비물 일괄 엑셀(CSV) 다운로드
+  const downloadAllClassMaterialsCSV = () => {
+    if (summaryClassMaterials.length === 0) {
+      alert("수합된 준비물 데이터가 없습니다. 먼저 [최신 수합 불러오기]를 눌러주세요.");
+      return;
+    }
+
+    const headers = ["학급", "모둠명", "활동설명", "오픈마켓", "내용(물품명)", "단위", "수량", "예상단가(원)", "예상금액(원)", "구매링크", "비고"];
+    const rows: string[][] = [];
+
+    summaryClassMaterials.forEach((grp: any) => {
+      const gName = grp.groupName || "미지정 모둠";
+      const cCode = grp.classCode || classCode;
+      const intro = grp.activityIntro || "";
+      const mats: BoothMaterialItem[] = grp.materials || [];
+
+      mats.forEach((item) => {
+        rows.push([
+          `"${cCode}"`,
+          `"${gName}"`,
+          `"${intro.replace(/"/g, '""')}"`,
+          `"${item.market}"`,
+          `"${item.name.replace(/"/g, '""')}"`,
+          `"${(item.unit || "개").replace(/"/g, '""')}"`,
+          String(item.quantity),
+          String(item.unitPrice),
+          String(item.totalPrice),
+          `"${(item.url || "").replace(/"/g, '""')}"`,
+          `"${(item.note || "").replace(/"/g, '""')}"`
+        ]);
+      });
+    });
+
+    if (rows.length === 0) {
+      alert("등록된 준비물 품목이 없습니다.");
+      return;
+    }
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${classCode}_전모둠_부스준비물_통합수합_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // 8. 학급 전체 모둠 준비물 일괄 스프레드시트 복사 (구글 시트에 바로 붙여넣을 수 있게 TSV 생성)
+  const copyAllClassMaterialsToClipboard = () => {
+    const allRows: string[] = [];
+
+    summaryClassMaterials.forEach((grp: any) => {
+      const gName = grp.groupName || "";
+      const mats: BoothMaterialItem[] = grp.materials || [];
+      mats.forEach((item) => {
+        allRows.push(`${gName}\t${item.market}\t${item.name}\t${item.unit}\t${item.quantity}\t${item.unitPrice}\t${item.totalPrice}\t${item.url}\t${item.note}`);
+      });
+    });
+
+    if (allRows.length === 0) {
+      alert("복사할 수합 준비물이 없습니다. [최신 데이터 불러오기]를 먼저 눌러보세요.");
+      return;
+    }
+
+    try {
+      navigator.clipboard.writeText(allRows.join("\n"));
+      setCopyFeedbackToast(`✨ [전체 모둠 총 ${allRows.length}건] 일괄 복사 완료! 스프레드시트에 Ctrl+V 하시면 채워집니다.`);
+      setTimeout(() => setCopyFeedbackToast(""), 5000);
+    } catch (err) {
+      console.error(err);
+      alert("클립보드 복사 권한이 필요합니다.");
     }
   };
 
@@ -5721,6 +5799,41 @@ ${clausesCombined}`
                 </div>
               </div>
 
+              {/* Sub-Tab Navigation: My Group Writer vs All Groups Class Summary */}
+              <div className="flex border-b border-slate-200 gap-2 bg-slate-100/80 p-1.5 rounded-xl">
+                <button
+                  onClick={() => setMaterialsSubTab("group")}
+                  className={`flex-1 py-2.5 px-4 text-xs font-bold rounded-lg transition flex items-center justify-center gap-2 cursor-pointer ${
+                    materialsSubTab === "group"
+                      ? "bg-white text-indigo-800 shadow-xs border border-slate-200 font-extrabold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                  }`}
+                >
+                  <ShoppingCart className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>📝 우리 모둠 준비물 작성 및 신청 ({groupName})</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setMaterialsSubTab("summary");
+                    fetchMaterialsSummary();
+                  }}
+                  className={`flex-1 py-2.5 px-4 text-xs font-bold rounded-lg transition flex items-center justify-center gap-2 cursor-pointer ${
+                    materialsSubTab === "summary"
+                      ? "bg-white text-indigo-800 shadow-xs border border-slate-200 font-extrabold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                  }`}
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>📊 학급 전체 모둠 일괄 수합 현황표 (선생님 전용 뷰)</span>
+                  <span className="text-[9px] bg-rose-100 text-rose-800 border border-rose-200 font-black px-2 py-0.5 rounded-full">한 번에 싹 수합</span>
+                </button>
+              </div>
+
+              {/* View 1: My Group Writing Mode */}
+              {materialsSubTab === "group" && (
+                <div className="flex flex-col gap-6 animate-fade-in">
+
               {/* Group Selector & 350,000 KRW Budget Progress Gauge */}
               {(() => {
                 const groupTotal = boothMaterials.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
@@ -6193,6 +6306,305 @@ ${clausesCombined}`
                   </div>
                 )}
               </div>
+
+              </div>
+              )}
+
+              {/* View 2: All Groups Class Summary Mode (선생님 전용 일괄 수합 뷰) */}
+              {materialsSubTab === "summary" && (
+                <div className="flex flex-col gap-6 animate-fade-in">
+                  {/* Summary Top Action Banner */}
+                  <div className="bg-gradient-to-r from-emerald-600 via-teal-700 to-indigo-800 p-5 rounded-2xl text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">📊</span>
+                        <h3 className="text-lg font-black tracking-tight">
+                          {classCode || "6-1"} 전 모둠 체험부스 준비물 종합 수합표
+                        </h3>
+                        <span className="text-[10px] bg-emerald-300 text-slate-950 font-black px-2.5 py-0.5 rounded-full">
+                          선생님 전용 일괄 처리
+                        </span>
+                      </div>
+                      <p className="text-xs text-emerald-100 font-medium max-w-2xl">
+                        아이들이 각 모둠에서 클라우드로 등록한 준비물 데이터를 한자리에 실시간으로 수합했습니다. 클릭 한 번으로 구글 스프레드시트에 복사하거나 엑셀로 다운로드하세요.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      <button
+                        onClick={() => fetchMaterialsSummary()}
+                        disabled={loadingMaterialsSummary}
+                        className="px-3.5 py-2.5 bg-white/20 hover:bg-white/30 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${loadingMaterialsSummary ? "animate-spin" : ""}`} />
+                        <span>{loadingMaterialsSummary ? "수합 중..." : "실시간 최신 수합"}</span>
+                      </button>
+
+                      <button
+                        onClick={() => copyAllClassMaterialsToClipboard()}
+                        className="px-3.5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                        title="전체 모둠의 모든 준비물을 구글 시트에 바로 붙여넣을 수 있게 복사합니다."
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>전 모둠 시트 복사 (Ctrl+V)</span>
+                      </button>
+
+                      <button
+                        onClick={() => downloadAllClassMaterialsCSV()}
+                        className="px-3.5 py-2.5 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-black text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                        title="전체 모둠 준비물 통합 CSV 파일 다운로드"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        <span>전 모둠 엑셀 다운로드</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Class Overall Budget Calculation */}
+                  {(() => {
+                    let totalItemsCount = 0;
+                    let totalAmount = 0;
+                    const groupBudgets: { [key: string]: { count: number; sum: number; intro: string; country: string } } = {};
+
+                    summaryClassMaterials.forEach((grp: any) => {
+                      const gName = grp.groupName || "미지정";
+                      const mats: BoothMaterialItem[] = grp.materials || [];
+                      const sum = mats.reduce((s: number, m: BoothMaterialItem) => s + (m.totalPrice || 0), 0);
+                      groupBudgets[gName] = {
+                        count: mats.length,
+                        sum,
+                        intro: grp.activityIntro || "",
+                        country: grp.selectedCountryName || ""
+                      };
+                      totalItemsCount += mats.length;
+                      totalAmount += sum;
+                    });
+
+                    const classBudgetLimit = 350000;
+                    const percent = Math.min(100, Math.round((totalAmount / classBudgetLimit) * 100));
+                    const remaining = classBudgetLimit - totalAmount;
+
+                    return (
+                      <div className="space-y-4">
+                        {/* Top Stat Cards */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                            <div className="text-[10px] font-bold text-slate-400">참여 모둠 수</div>
+                            <div className="text-xl font-black text-slate-900 mt-1">{Object.keys(groupBudgets).length}개 모둠</div>
+                            <div className="text-[10.5px] text-slate-500 mt-0.5">총 등록 품목: {totalItemsCount}건</div>
+                          </div>
+
+                          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                            <div className="text-[10px] font-bold text-slate-400">반 전체 신청 총액</div>
+                            <div className="text-xl font-black text-indigo-700 mt-1">{totalAmount.toLocaleString()}원</div>
+                            <div className="text-[10.5px] text-slate-500 mt-0.5">한도 350,000원 대비</div>
+                          </div>
+
+                          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                            <div className="text-[10px] font-bold text-slate-400">잔여 가능 예산</div>
+                            <div className={`text-xl font-black mt-1 ${remaining < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                              {remaining < 0 ? `-${Math.abs(remaining).toLocaleString()}원 (초과)` : `${remaining.toLocaleString()}원 남음`}
+                            </div>
+                            <div className="text-[10.5px] text-slate-500 mt-0.5">예산 소진율: {percent}%</div>
+                          </div>
+
+                          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                            <div className="text-[10px] font-bold text-slate-400">예산 집행 게이지</div>
+                            <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden mt-2">
+                              <div 
+                                className={`h-full transition-all duration-500 ${remaining < 0 ? "bg-rose-500" : percent > 85 ? "bg-amber-500" : "bg-emerald-500"}`} 
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                            <div className="text-[10px] text-slate-400 mt-1.5 flex justify-between">
+                              <span>0원</span>
+                              <span>35만원</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Group Summary Badges Grid */}
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4.5 shadow-xs space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                              <span>🎪 모둠별 신청 현황 요약</span>
+                            </h4>
+                            <span className="text-[10px] text-slate-400">모둠을 클릭하여 개별 작성 모드로 전환 가능</span>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                            {Object.keys(groupBudgets).length === 0 ? (
+                              <div className="col-span-full text-center py-6 text-xs text-slate-400">
+                                아직 등록된 모둠 준비물이 없거나 불러오는 중입니다. 위의 [실시간 최신 수합]을 눌러보세요.
+                              </div>
+                            ) : (
+                              Object.entries(groupBudgets).map(([gName, info]) => (
+                                <button
+                                  key={gName}
+                                  onClick={() => {
+                                    setGroupName(gName);
+                                    setMaterialsSubTab("group");
+                                    localStorage.setItem("expo_groupName", gName);
+                                  }}
+                                  className="bg-slate-50 hover:bg-indigo-50/60 border border-slate-200 hover:border-indigo-300 rounded-xl p-3 space-y-1 text-center transition cursor-pointer"
+                                >
+                                  <div className="text-xs font-black text-slate-900">{gName}</div>
+                                  <div className="text-[10px] text-slate-500 font-medium truncate">{info.country || "국가 미지정"}</div>
+                                  <div className="text-xs font-extrabold text-indigo-600">{info.sum.toLocaleString()}원</div>
+                                  <div className="text-[9.5px] text-slate-400">{info.count}개 품목</div>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </div>
+
+                        {/* All Materials Table with Filter */}
+                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xl">📋</span>
+                              <div>
+                                <h3 className="text-sm font-black text-slate-900">학급 전체 준비물 세부 목록</h3>
+                                <p className="text-[11px] text-slate-500">
+                                  전체 모둠의 모든 준비물을 한눈에 조회하고 쇼핑몰별로 필터링할 수 있습니다.
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Market Filter Tabs */}
+                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                              {["all", "아이스크림몰", "11번가", "지마켓", "기타"].map((m) => (
+                                <button
+                                  key={m}
+                                  onClick={() => setMaterialsMarketFilter(m)}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                                    materialsMarketFilter === m
+                                      ? "bg-white text-indigo-700 shadow-xs font-black"
+                                      : "text-slate-600 hover:text-slate-900"
+                                  }`}
+                                >
+                                  {m === "all" ? "전체 보기" : m}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Table */}
+                          {(() => {
+                            const flatItems: Array<{ groupName: string; item: BoothMaterialItem; intro: string }> = [];
+                            summaryClassMaterials.forEach((grp: any) => {
+                              const gName = grp.groupName || "";
+                              const intro = grp.activityIntro || "";
+                              const mats: BoothMaterialItem[] = grp.materials || [];
+                              mats.forEach((item: BoothMaterialItem) => {
+                                if (materialsMarketFilter === "all" || item.market === materialsMarketFilter) {
+                                  flatItems.push({ groupName: gName, item, intro });
+                                }
+                              });
+                            });
+
+                            if (flatItems.length === 0) {
+                              return (
+                                <div className="text-center py-12 text-slate-400 text-xs">
+                                  수합된 준비물 품목이 없거나 선택한 마켓 조건에 맞는 항목이 없습니다.
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                                <table className="w-full text-left text-xs border-collapse">
+                                  <thead>
+                                    <tr className="bg-slate-100/80 border-b border-slate-200 text-[11px] text-slate-600 font-bold">
+                                      <th className="py-2.5 px-3">모둠</th>
+                                      <th className="py-2.5 px-3">오픈마켓</th>
+                                      <th className="py-2.5 px-3 min-w-[140px]">내용 (물품명)</th>
+                                      <th className="py-2.5 px-3 text-center">단위</th>
+                                      <th className="py-2.5 px-3 text-right">수량</th>
+                                      <th className="py-2.5 px-3 text-right">예상단가</th>
+                                      <th className="py-2.5 px-3 text-right">예상금액</th>
+                                      <th className="py-2.5 px-3 text-center">구매링크</th>
+                                      <th className="py-2.5 px-3 min-w-[120px]">비고</th>
+                                      <th className="py-2.5 px-3 text-center">작업</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {flatItems.map(({ groupName: gName, item }, idx) => (
+                                      <tr key={`${gName}_${item.id}_${idx}`} className="hover:bg-slate-50 transition">
+                                        <td className="py-3 px-3 whitespace-nowrap">
+                                          <span className="font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md text-[11px]">
+                                            {gName}
+                                          </span>
+                                        </td>
+                                        <td className="py-3 px-3 whitespace-nowrap">
+                                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                                            item.market === "아이스크림몰"
+                                              ? "bg-amber-100 text-amber-900 border-amber-200"
+                                              : item.market === "11번가"
+                                                ? "bg-rose-100 text-rose-900 border-rose-200"
+                                                : item.market === "지마켓"
+                                                  ? "bg-emerald-100 text-emerald-900 border-emerald-200"
+                                                  : "bg-slate-100 text-slate-700 border-slate-200"
+                                          }`}>
+                                            {item.market}
+                                          </span>
+                                        </td>
+                                        <td className="py-3 px-3 font-bold text-slate-900">
+                                          {item.name}
+                                        </td>
+                                        <td className="py-3 px-3 text-center text-slate-600 font-medium">
+                                          {item.unit || "개"}
+                                        </td>
+                                        <td className="py-3 px-3 text-right font-black text-slate-900 font-mono">
+                                          {item.quantity}
+                                        </td>
+                                        <td className="py-3 px-3 text-right text-slate-600 font-mono">
+                                          {item.unitPrice.toLocaleString()}원
+                                        </td>
+                                        <td className="py-3 px-3 text-right font-black text-indigo-700 font-mono">
+                                          {item.totalPrice.toLocaleString()}원
+                                        </td>
+                                        <td className="py-3 px-3 text-center">
+                                          {item.url ? (
+                                            <a
+                                              href={item.url.startsWith("http") ? item.url : `https://${item.url}`}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="inline-flex items-center gap-1 text-[10.5px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition"
+                                            >
+                                              <ExternalLink className="w-3 h-3" /> 열기
+                                            </a>
+                                          ) : (
+                                            <span className="text-[10px] text-slate-300">-</span>
+                                          )}
+                                        </td>
+                                        <td className="py-3 px-3 text-[11px] text-slate-500">
+                                          {item.note || "-"}
+                                        </td>
+                                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                                          <button
+                                            type="button"
+                                            onClick={() => copyItemToClipboard(item)}
+                                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-[10.5px] font-bold transition flex items-center gap-0.5 cursor-pointer mx-auto"
+                                            title="이 품목 구글 시트용 복사"
+                                          >
+                                            <Copy className="w-2.5 h-2.5" />
+                                            <span>시트 복사</span>
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
             </div>
           )}
