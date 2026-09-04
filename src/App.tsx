@@ -1152,17 +1152,19 @@ export default function App() {
   // 모둠원 전용 원클릭 공유 링크 생성 (학급 토큰 + 모둠명 파라미터 결합)
   const getShareUrlForGroup = (cCode: string, gName: string) => {
     const token = CLASS_SECURITY_TOKENS[cCode] || cCode;
+    const cleanGroup = (gName || "1모둠").trim();
     try {
       const url = new URL(window.location.href);
       url.searchParams.set("class", token);
-      url.searchParams.set("group", encodeURIComponent(gName.trim()));
+      url.searchParams.set("group", cleanGroup);
       url.searchParams.delete("classCode");
       url.searchParams.delete("code");
       return url.toString();
     } catch (e) {
-      return `${window.location.origin}${window.location.pathname}?class=${token}&group=${encodeURIComponent(gName.trim())}`;
+      return `${window.location.origin}${window.location.pathname}?class=${token}&group=${encodeURIComponent(cleanGroup)}`;
     }
   };
+
 
   const handleCopyClassLink = (cCode: string) => {
     if (!isTeacherUnlocked && cCode !== classCode) {
@@ -1433,12 +1435,33 @@ export default function App() {
     try {
       const params = new URLSearchParams(window.location.search);
       const urlGroup = params.get("group") || params.get("groupName");
-      if (urlGroup) return decodeURIComponent(urlGroup).trim();
+      if (urlGroup) {
+        try {
+          return decodeURIComponent(urlGroup).trim();
+        } catch (_) {
+          return urlGroup.trim();
+        }
+      }
       const savedGroup = localStorage.getItem("expo_groupName");
       if (savedGroup) return savedGroup;
     } catch (e) {}
     return "글로벌 지킴이 1모둠";
   });
+
+  // groupName 변경 시 URL 파라미터 및 로컬스토리지 동기화
+  useEffect(() => {
+    try {
+      if (groupName) {
+        localStorage.setItem("expo_groupName", groupName);
+        const url = new URL(window.location.href);
+        if (url.searchParams.get("group") !== groupName) {
+          url.searchParams.set("group", groupName);
+          window.history.replaceState(null, "", url.toString());
+        }
+      }
+    } catch (_) {}
+  }, [groupName]);
+
   const [teacherFilterClass, setTeacherFilterClass] = useState<string>(""); // "" means show all, or filtered classroom code e.g., "6-1"
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([
     { name: "김민재", role: "기획/연출" },
@@ -6437,12 +6460,12 @@ ${clausesCombined}`
 
                             {/* 예상단가 */}
                             <td className="py-3 px-3 text-right text-slate-600 font-mono">
-                              {item.unitPrice.toLocaleString()}원
+                              {(Number(item.unitPrice) || 0).toLocaleString()}원
                             </td>
 
                             {/* 예상금액 */}
                             <td className="py-3 px-3 text-right font-black text-indigo-700 font-mono">
-                              {item.totalPrice.toLocaleString()}원
+                              {(Number(item.totalPrice) || 0).toLocaleString()}원
                             </td>
 
                             {/* 구매링크 */}
@@ -6748,10 +6771,10 @@ ${clausesCombined}`
                                           {item.quantity}
                                         </td>
                                         <td className="py-3 px-3 text-right text-slate-600 font-mono">
-                                          {item.unitPrice.toLocaleString()}원
+                                          {(Number(item.unitPrice) || 0).toLocaleString()}원
                                         </td>
                                         <td className="py-3 px-3 text-right font-black text-indigo-700 font-mono">
-                                          {item.totalPrice.toLocaleString()}원
+                                          {(Number(item.totalPrice) || 0).toLocaleString()}원
                                         </td>
                                         <td className="py-3 px-3 text-center">
                                           {item.url ? (
@@ -7543,8 +7566,8 @@ ${clausesCombined}`
                                   <td className="py-2.5 px-3 font-bold text-slate-900">{item.name}</td>
                                   <td className="py-2.5 px-3 text-center text-slate-600 font-medium">{item.unit || "개"}</td>
                                   <td className="py-2.5 px-3 text-right font-black font-mono">{item.quantity}</td>
-                                  <td className="py-2.5 px-3 text-right text-slate-600 font-mono">{item.unitPrice.toLocaleString()}원</td>
-                                  <td className="py-2.5 px-3 text-right font-black text-indigo-700 font-mono">{item.totalPrice.toLocaleString()}원</td>
+                                  <td className="py-2.5 px-3 text-right text-slate-600 font-mono">{(Number(item.unitPrice) || 0).toLocaleString()}원</td>
+                                  <td className="py-2.5 px-3 text-right font-black text-indigo-700 font-mono">{(Number(item.totalPrice) || 0).toLocaleString()}원</td>
                                   <td className="py-2.5 px-3 text-center">
                                     {item.url ? (
                                       <a href={item.url.startsWith("http") ? item.url : `https://${item.url}`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline inline-flex items-center gap-0.5 text-[10.5px] font-bold">
@@ -9181,20 +9204,21 @@ ${clausesCombined}`
               <span>내 이름:</span>
             </span>
             <div className="flex items-center gap-1 overflow-x-auto py-0.5">
-              {groupMembers.map((member, idx) => {
-                const isSelected = chatSenderName === member.name;
+              {(Array.isArray(groupMembers) ? groupMembers : []).filter(Boolean).map((member, idx) => {
+                const memberName = member?.name || `모둠원${idx + 1}`;
+                const isSelected = chatSenderName === memberName;
                 return (
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => handleSelectChatSender(member.name)}
+                    onClick={() => handleSelectChatSender(memberName)}
                     className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition cursor-pointer shrink-0 ${
                       isSelected
                         ? "bg-indigo-600 text-white shadow-xs"
                         : "bg-white text-indigo-900 border border-indigo-200 hover:bg-indigo-100/70"
                     }`}
                   >
-                    {member.name}
+                    {memberName}
                   </button>
                 );
               })}
@@ -9223,8 +9247,8 @@ ${clausesCombined}`
                 </p>
               </div>
             ) : (
-              chatMessages.map((msg) => {
-                const isMe = msg.senderName === chatSenderName;
+              (Array.isArray(chatMessages) ? chatMessages : []).filter(Boolean).map((msg) => {
+                const isMe = (msg.senderName || "").trim() === (chatSenderName || "").trim();
                 return (
                   <div
                     key={msg.id}
