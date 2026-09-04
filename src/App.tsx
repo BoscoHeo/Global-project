@@ -1806,8 +1806,16 @@ export default function App() {
   // Persistent LocalStorage Auto-Save & Auto-Restore for offline & server restart resilience
   useEffect(() => {
     try {
-      const savedGroup = localStorage.getItem("expo_groupName");
-      if (savedGroup) setGroupName(savedGroup);
+      const params = new URLSearchParams(window.location.search);
+      const urlGroup = params.get("group") || params.get("groupName");
+      if (urlGroup) {
+        const decoded = decodeURIComponent(urlGroup).trim();
+        setGroupName(decoded);
+        try { localStorage.setItem("expo_groupName", decoded); } catch (e) {}
+      } else {
+        const savedGroup = localStorage.getItem("expo_groupName");
+        if (savedGroup) setGroupName(savedGroup);
+      }
 
       const savedMembers = localStorage.getItem("expo_groupMembers");
       if (savedMembers) setGroupMembers(JSON.parse(savedMembers));
