@@ -515,6 +515,10 @@ const classroomGroupWorkspaces = new Map<string, any>();
 // 모둠별 비밀번호(PIN) 저장소 (인메모리 캐시 및 Firestore 연동)
 const classroomGroupPasscodes = new Map<string, string>();
 
+// 모둠원 간 실시간 채팅 메시지 저장소 (인메모리 캐시 및 Firestore 연동: key = `${classCode}_${groupName}`)
+const classroomGroupChats = new Map<string, any[]>();
+
+
 // Class-specific passcode storage (acts as local cache/fallback)
 const classroomPasscodes = new Map<string, string>([
   ["master", "8900"]
@@ -596,6 +600,16 @@ async function syncFromFirestore() {
       }
     });
     console.log(`[Firebase] Loaded ${groupPasscodesSnapshot.size} group passcodes from Firestore.`);
+
+    // 7. Sync Classroom Group Chats (대화 내용 영구 복원)
+    const groupChatsSnapshot = await getDocs(collection(db, "classroom_chats"));
+    groupChatsSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data && Array.isArray(data.messages)) {
+        classroomGroupChats.set(doc.id, data.messages);
+      }
+    });
+    console.log(`[Firebase] Loaded ${groupChatsSnapshot.size} group chat rooms from Firestore.`);
   } catch (err: any) {
     console.error("[Firebase] Error performing initial database sync:", err);
   }
@@ -1244,6 +1258,204 @@ app.post("/api/group/passcode/reset", async (req, res) => {
   }
 
   return res.json({ success: true, message: `'${groupName}' 모둠 비밀번호가 초기화되었습니다.` });
+});
+
+// ==========================================
+// [모둠 전용 실시간 협업 채팅 API]
+// 학생들이 같은 모둠 안에서 실시간으로 대화하고, 새로고침해도 대화가 날아가지 않도록 Firestore에 영구 보관합니다.
+// ==========================================
+
+// 1. 메시지 전송 및 영구 저장 (Send Message)
+app.post("/api/group/chat/send", async (req, res) => {
+  try {
+    const { classCode, groupName, senderName, content } = req.body;
+    const classCodeVal = String(classCode || "").trim();
+    const groupNameVal = String(groupName || "").trim();
+    const senderNameVal = String(senderName || "모둠원").trim();
+    const contentVal = String(content || "").trim();
+
+    if (!classCodeVal || !groupNameVal || !contentVal) {
+      return res.status(400).json({ error: "학급 코드, 모둠명, 대화 내용은 필수입니다." });
+    }
+
+    // 도배 및 과도한 길이 방지 (최대 500자)
+    if (contentVal.length > 500) {
+      return res.status(400).json({ error: "메시지는 한 번에 500자 이하로 작성해 주세요." });
+    }
+
+    const groupKey = `${classCodeVal}_${groupNameVal}`;
+    const now = new Date();
+    
+    // 한국어 초등학생 눈높이에 맞춘 오전/오후 시간 표기 (예: 오후 3:05)
+    const timeFormatted = new Intl.DateTimeFormat("ko-KR", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    }).format(now);
+
+    const newMessage = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      classCode: classCodeVal,
+      groupName: groupNameVal,
+      senderName: senderNameVal.substring(0, 20),
+      content: contentVal,
+      timestamp: now.toISOString(),
+      timeFormatted
+    };
+
+    // 1) 인메모리 캐시 업데이트 (최근 200개 메시지 유지)
+    let currentMessages = classroomGroupChats.get(groupKey) || [];
+    currentMessages.push(newMessage);
+    if (currentMessages.length > 200) {
+      currentMessages = currentMessages.slice(-200);
+    }
+    classroomGroupChats.set(groupKey, currentMessages);
+
+    // 2) Firestore에 영구 저장 (브라우저를 닫아도 복원 가능)
+    if (db) {
+      try {
+        await setDoc(doc(db, "classroom_chats", groupKey), {
+          classCode: classCodeVal,
+          groupName: groupNameVal,
+          messages: currentMessages,
+          updatedAt: now.toISOString(),
+          lastMessageId: newMessage.id
+        });
+        console.log(`[Group Chat] Message saved to Firestore for '${groupKey}' by '${senderNameVal}'`);
+      } catch (dbErr) {
+        console.error(`[Group Chat] Firestore error for '${groupKey}':`, dbErr);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: newMessage,
+      totalCount: currentMessages.length
+    });
+  } catch (error: any) {
+    console.error("[Group Chat] Send error:", error);
+    return res.status(500).json({ error: "메시지 전송 중 오류가 발생했습니다." });
+  }
+});
+
+// 2. 모둠 메시지 목록 불러오기 (Get Messages)
+app.get("/api/group/chat/messages", async (req, res) => {
+  try {
+    const classCodeVal = String(req.query.classCode || "").trim();
+    const groupNameVal = String(req.query.groupName || "").trim();
+
+    if (!classCodeVal || !groupNameVal) {
+      return res.status(400).json({ error: "학급 코드와 모둠명이 필요합니다." });
+    }
+
+    const groupKey = `${classCodeVal}_${groupNameVal}`;
+    let messages = classroomGroupChats.get(groupKey);
+
+    // 캐시에 없는 경우 Firestore에서 복원 시도
+    if (!messages && db) {
+      try {
+        const snapshot = await getDocs(collection(db, "classroom_chats"));
+        snapshot.docs.forEach(d => {
+          if (d.id === groupKey) {
+            const data = d.data();
+            if (data && Array.isArray(data.messages)) {
+              messages = data.messages;
+              classroomGroupChats.set(groupKey, messages);
+            }
+          }
+        });
+      } catch (dbErr) {
+        console.error(`[Group Chat] Firestore read error for '${groupKey}':`, dbErr);
+      }
+    }
+
+    return res.json({
+      success: true,
+      groupKey,
+      messages: messages || []
+    });
+  } catch (error: any) {
+    console.error("[Group Chat] Get messages error:", error);
+    return res.status(500).json({ error: "채팅 목록을 불러오는 중 오류가 발생했습니다." });
+  }
+});
+
+// 3. 모둠 메시지 상태 확인 (경량 폴링용 - 대역폭 절약)
+app.get("/api/group/chat/status", (req, res) => {
+  const classCodeVal = String(req.query.classCode || "").trim();
+  const groupNameVal = String(req.query.groupName || "").trim();
+
+  if (!classCodeVal || !groupNameVal) {
+    return res.status(400).json({ error: "학급 코드와 모둠명이 필요합니다." });
+  }
+
+  const groupKey = `${classCodeVal}_${groupNameVal}`;
+  const messages = classroomGroupChats.get(groupKey) || [];
+
+  if (messages.length === 0) {
+    return res.json({ count: 0, lastMessageId: null, lastTimestamp: null });
+  }
+
+  const lastMsg = messages[messages.length - 1];
+  return res.json({
+    count: messages.length,
+    lastMessageId: lastMsg.id,
+    lastTimestamp: lastMsg.timestamp
+  });
+});
+
+// 4. 모둠 채팅 대화 내역 초기화 (Clear Chat - 교사 또는 모둠원 정리용)
+app.post("/api/group/chat/clear", async (req, res) => {
+  try {
+    const { classCode, groupName } = req.body;
+    const classCodeVal = String(classCode || "").trim();
+    const groupNameVal = String(groupName || "").trim();
+
+    if (!classCodeVal || !groupNameVal) {
+      return res.status(400).json({ error: "학급 코드와 모둠명이 필요합니다." });
+    }
+
+    const groupKey = `${classCodeVal}_${groupNameVal}`;
+    classroomGroupChats.set(groupKey, []);
+
+    if (db) {
+      try {
+        await deleteDoc(doc(db, "classroom_chats", groupKey));
+        console.log(`[Group Chat] Cleared chat history for '${groupKey}' in Firestore.`);
+      } catch (err) {
+        console.error(`[Group Chat] Error deleting chat history for '${groupKey}':`, err);
+      }
+    }
+
+    return res.json({ success: true, message: `'${groupNameVal}' 모둠의 대화 기록이 초기화되었습니다.` });
+  } catch (error: any) {
+    console.error("[Group Chat] Clear error:", error);
+    return res.status(500).json({ error: "채팅 초기화 중 오류가 발생했습니다." });
+  }
+});
+
+// 5. 교사용 전체 모둠 채팅 현황 모니터링 (Summary for Teacher)
+app.get("/api/group/chat/summary", (req, res) => {
+  const authInfo = getAuthorizedClassCode(req);
+  if (!authInfo.authorized) {
+    return res.status(401).json({ error: "교사 인증이 필요합니다." });
+  }
+
+  const classCodeVal = String(req.query.classCode || authInfo.classScope || "6-1").trim();
+  const summaryList: Array<{ groupName: string; count: number; lastMessage?: any }> = [];
+
+  const targetGroups = ["1모둠", "2모둠", "3모둠", "4모둠"];
+  for (const g of targetGroups) {
+    const key = `${classCodeVal}_${g}`;
+    const msgs = classroomGroupChats.get(key) || [];
+    summaryList.push({
+      groupName: g,
+      count: msgs.length,
+      lastMessage: msgs.length > 0 ? msgs[msgs.length - 1] : undefined
+    });
+  }
+
+  return res.json({ success: true, classCode: classCodeVal, groups: summaryList });
 });
 
 // Route: Update teacher-configured API Key in server memory

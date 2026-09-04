@@ -35,9 +35,15 @@ import {
   ShoppingCart,
   ExternalLink,
   FileSpreadsheet,
-  Check
+  Check,
+  MessageSquare,
+  MessageCircle,
+  X,
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
-import { EvaluationLevel, TopicType, StoryboardScene, CountryInfo, StampData, GroupMember, OfflineBoothPlan, GroupWorkspaceData, BoothMaterialItem, OpenMarketType } from "./types";
+import { EvaluationLevel, TopicType, StoryboardScene, CountryInfo, StampData, GroupMember, OfflineBoothPlan, GroupWorkspaceData, BoothMaterialItem, OpenMarketType, GroupChatMessage } from "./types";
+
 
 // Pre-seeded rich world culture data for academic research & quizzes (13~18차시)
 // Each of the 6 continents contains at least 4 detailed sample countries for classroom assignments
@@ -1689,13 +1695,187 @@ export default function App() {
     }
   };
 
-  // 교사 탭 진입 시 모둠별 비밀번호 목록 및 준비물 수합 자동 조회
+  // 교사용 모둠별 실시간 채팅 현황 요약
+  const [teacherChatSummary, setTeacherChatSummary] = useState<Array<{ groupName: string; count: number; lastMessage?: any }>>([]);
+  const [loadingChatSummary, setLoadingChatSummary] = useState<boolean>(false);
+
+  const fetchTeacherChatSummary = async () => {
+    setLoadingChatSummary(true);
+    try {
+      const res = await fetch(`/api/group/chat/summary?classCode=${encodeURIComponent(classCode)}`, {
+        headers: { "x-teacher-passcode": "8900" }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTeacherChatSummary(data.groups || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingChatSummary(false);
+    }
+  };
+
+  // 교사 탭 진입 시 모둠별 비밀번호 목록 및 준비물 수합, 채팅 요약 자동 조회
   useEffect(() => {
     if (activeTab === "teacher" && isTeacherUnlocked) {
       fetchTeacherGroupPasscodes();
       fetchMaterialsSummary();
+      fetchTeacherChatSummary();
     }
   }, [activeTab, isTeacherUnlocked, classCode]);
+
+  // ==============================================================
+  // 💬 [모둠 전용 실시간 협업 채팅 State 및 로직]
+  // 모둠 친구들끼리 실시간으로 대화하고 Firestore에 영구 보존됩니다.
+  // ==============================================================
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+  const [chatMessages, setChatMessages] = useState<GroupChatMessage[]>([]);
+  const [chatInputText, setChatInputText] = useState<string>("");
+  const [chatSenderName, setChatSenderName] = useState<string>(() => {
+    try {
+      return localStorage.getItem("expo_chat_sender") || "김민재";
+    } catch (_) {
+      return "김민재";
+    }
+  });
+  const [isSendingChat, setIsSendingChat] = useState<boolean>(false);
+  const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+  const [chatLastMsgId, setChatLastMsgId] = useState<string>("");
+  const chatMessagesEndRef = React.useRef<HTMLDivElement>(null);
+  const isChatOpenRef = React.useRef<boolean>(false);
+  isChatOpenRef.current = isChatOpen;
+
+  // 발화자 변경 핸들러
+  const handleSelectChatSender = (name: string) => {
+    setChatSenderName(name);
+    try {
+      localStorage.setItem("expo_chat_sender", name);
+    } catch (_) {}
+  };
+
+  // 모둠 메시지 목록 불러오기
+  const loadGroupChatMessages = async (targetClass: string, targetGroup: string) => {
+    if (!targetClass || !targetGroup) return;
+    try {
+      const res = await fetch(`/api/group/chat/messages?classCode=${encodeURIComponent(targetClass)}&groupName=${encodeURIComponent(targetGroup)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const msgs: GroupChatMessage[] = data.messages || [];
+        setChatMessages(msgs);
+        if (msgs.length > 0) {
+          setChatLastMsgId(msgs[msgs.length - 1].id);
+        }
+      }
+    } catch (err) {
+      console.error("[Chat] Load messages error:", err);
+    }
+  };
+
+  // 모둠 메시지 전송 핸들러
+  const handleSendChatMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const content = chatInputText.trim();
+    if (!content || isSendingChat) return;
+
+    const sender = chatSenderName.trim() || myAuthorName || "모둠원";
+    setIsSendingChat(true);
+
+    try {
+      const res = await fetch("/api/group/chat/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classCode,
+          groupName,
+          senderName: sender,
+          content
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.message) {
+          setChatMessages(prev => {
+            if (prev.some(m => m.id === data.message.id)) return prev;
+            return [...prev, data.message];
+          });
+          setChatLastMsgId(data.message.id);
+          setChatInputText("");
+        }
+      } else {
+        const err = await res.json();
+        alert(err.error || "메시지 전송에 실패했습니다.");
+      }
+    } catch (err) {
+      console.error("[Chat] Send error:", err);
+      alert("서버 통신 오류로 메시지를 전송하지 못했습니다.");
+    } finally {
+      setIsSendingChat(false);
+    }
+  };
+
+  // 모둠 대화 내역 초기화
+  const handleClearChatMessages = async () => {
+    if (!window.confirm(`'${groupName}'의 대화 내용을 모두 초기화하시겠습니까?\n새로운 마음으로 대화를 시작할 수 있습니다.`)) return;
+    try {
+      const res = await fetch("/api/group/chat/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classCode, groupName })
+      });
+      if (res.ok) {
+        setChatMessages([]);
+        setChatLastMsgId("");
+        setUnreadChatCount(0);
+      }
+    } catch (err) {
+      console.error("[Chat] Clear error:", err);
+    }
+  };
+
+  // 모둠 또는 학급 변경 시 채팅 메시지 최초 로드
+  useEffect(() => {
+    loadGroupChatMessages(classCode, groupName);
+    setUnreadChatCount(0);
+  }, [classCode, groupName]);
+
+  // 실시간 폴링 (약 2초 간격)
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      if (!classCode || !groupName) return;
+      try {
+        const res = await fetch(`/api/group/chat/status?classCode=${encodeURIComponent(classCode)}&groupName=${encodeURIComponent(groupName)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.lastMessageId && data.lastMessageId !== chatLastMsgId) {
+            const msgRes = await fetch(`/api/group/chat/messages?classCode=${encodeURIComponent(classCode)}&groupName=${encodeURIComponent(groupName)}`);
+            if (msgRes.ok) {
+              const msgData = await msgRes.json();
+              const newMsgs: GroupChatMessage[] = msgData.messages || [];
+              setChatMessages(newMsgs);
+              setChatLastMsgId(data.lastMessageId);
+              if (!isChatOpenRef.current) {
+                setUnreadChatCount(prev => prev + 1);
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }, 2000);
+
+    return () => clearInterval(timer);
+  }, [classCode, groupName, chatLastMsgId]);
+
+  // 채팅창이 열리거나 새 메시지 수신 시 스크롤 하단 이동
+  useEffect(() => {
+    if (isChatOpen) {
+      setUnreadChatCount(0);
+      setTimeout(() => {
+        chatMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    }
+  }, [isChatOpen, chatMessages.length]);
 
   // Tab 1 States: Storyboard Planner (1-Min Short-form Video Focus)
   const [storyboard, setStoryboard] = useState<StoryboardScene[]>([]);
@@ -7134,6 +7314,93 @@ ${clausesCombined}`
                 </div>
               </div>
 
+              {/* 💬 4개 모둠 실시간 협업 채팅 교사 모니터링 대시보드 */}
+              <div className="w-full bg-gradient-to-r from-purple-50/90 via-indigo-50/70 to-blue-50/50 border-2 border-purple-200/90 rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-purple-150/70">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-200">
+                      <MessageSquare className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                        <span>{classCode.replace('-', '학년 ')}반 실시간 협업 채팅 모니터링 센터</span>
+                        <span className="text-[10px] bg-purple-100 text-purple-700 font-extrabold px-2.5 py-0.5 rounded-full border border-purple-200">
+                          실시간 생활지도 & 참여도 파악
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        학생들이 대본이나 부스 기획을 의논하며 나눈 대화 기록이 영구 보존되며, 선생님께서 각 모둠의 협업 현황을 한눈에 살펴보실 수 있습니다.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={fetchTeacherChatSummary}
+                    disabled={loadingChatSummary}
+                    className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl transition flex items-center gap-1.5 shadow-md shadow-purple-100 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingChatSummary ? "animate-spin" : ""}`} />
+                    <span>{loadingChatSummary ? "조회 중..." : "대화 현황 새로고침"}</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                  {["1모둠", "2모둠", "3모둠", "4모둠"].map((gName) => {
+                    const groupChatInfo = teacherChatSummary.find(item => item.groupName === gName);
+                    const msgCount = groupChatInfo ? groupChatInfo.count : 0;
+                    const lastMsg = groupChatInfo?.lastMessage;
+
+                    return (
+                      <div
+                        key={gName}
+                        className="bg-white rounded-2xl border border-purple-150 p-4 flex flex-col justify-between shadow-2xs hover:shadow-sm transition space-y-3"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-slate-900 text-sm">{gName}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              msgCount > 0
+                                ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                : "bg-slate-100 text-slate-400"
+                            }`}>
+                              {msgCount > 0 ? `${msgCount}건의 대화` : "대화 없음"}
+                            </span>
+                          </div>
+
+                          {lastMsg ? (
+                            <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100 text-[11px] space-y-1">
+                              <div className="flex items-center justify-between text-slate-500 font-medium text-[10px]">
+                                <span className="font-bold text-indigo-700">[{lastMsg.senderName}]</span>
+                                <span>{lastMsg.timeFormatted}</span>
+                              </div>
+                              <p className="text-slate-700 line-clamp-2 leading-relaxed font-normal">
+                                {lastMsg.content}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-slate-400 italic py-2">
+                              아직 모둠 친구들이 나눈 대화가 없습니다.
+                            </p>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGroupName(gName);
+                            setIsChatOpen(true);
+                          }}
+                          className="w-full py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1 cursor-pointer border border-purple-200"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          <span>{gName} 대화방 열람하기</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* 🛒 12~14차시 체험부스 준비물 & 예산 일괄 수합 센터 (교사 허브) */}
               <div className="bg-white border-2 border-amber-300 rounded-3xl p-6 shadow-sm space-y-5">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-amber-100">
@@ -8833,6 +9100,194 @@ ${clausesCombined}`
         </div>
       )}
 
+      {/* ============================================================== */}
+      {/* 💬 [모둠 전용 실시간 협업 플로팅 채팅 위젯] */}
+      {/* 초등학생들이 어느 탭에서든 모둠 친구들과 실시간으로 의논할 수 있으며 */}
+      {/* 새로고침해도 대화 내용이 절대 날아가지 않도록 Firestore에 영구 보존됩니다. */}
+      {/* ============================================================== */}
+
+      {/* 1. 플로팅 채팅 토글 버튼 (화면 우측 하단 고정) */}
+      <div className="fixed bottom-5 right-5 z-40 flex items-center gap-2">
+        <button
+          onClick={() => setIsChatOpen(prev => !prev)}
+          className="group relative flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 hover:from-indigo-700 hover:to-purple-800 text-white font-black text-xs rounded-full shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer border-2 border-white/20"
+          title={`${groupName} 실시간 협업 대화방`}
+        >
+          <div className="relative">
+            <MessageCircle className="w-5 h-5 text-white animate-pulse" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-indigo-700 animate-ping"></span>
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-indigo-700"></span>
+          </div>
+          
+          <span className="hidden sm:inline">💬 {groupName} 모둠 채팅</span>
+          <span className="sm:hidden">💬 채팅</span>
+
+          {/* 읽지 않은 새 메시지 알림 배지 */}
+          {unreadChatCount > 0 && (
+            <span className="ml-1 px-2 py-0.5 bg-rose-500 text-white font-extrabold text-[10px] rounded-full shadow-md animate-bounce">
+              +{unreadChatCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* 2. 슬라이드업 모둠 실시간 채팅 패널 */}
+      {isChatOpen && (
+        <div className="fixed bottom-20 right-3 sm:right-6 w-[94vw] sm:w-[410px] h-[560px] max-h-[82vh] bg-white rounded-3xl shadow-2xl border border-slate-200/90 z-50 flex flex-col overflow-hidden animate-slide-up backdrop-blur-sm">
+          
+          {/* 채팅 헤더 */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-indigo-900 text-white px-4 py-3.5 flex items-center justify-between select-none shadow-md">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-indigo-600/60 border border-indigo-400/40 flex items-center justify-center text-sm shadow-inner">
+                💬
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <h4 className="text-xs font-black text-white tracking-tight">{groupName} 실시간 대화방</h4>
+                  <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 font-bold rounded-full border border-emerald-500/30">
+                    LIVE
+                  </span>
+                </div>
+                <p className="text-[10px] text-indigo-200/70 font-medium flex items-center gap-1">
+                  <span>{classCode}</span>
+                  <span>•</span>
+                  <span>☁️ Firestore 영구 보존</span>
+                </p>
+              </div>
+            </div>
+
+            {/* 헤더 우측 컨트롤 버튼 */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleClearChatMessages}
+                title="채팅 대화 초기화"
+                className="p-1.5 text-indigo-200 hover:text-rose-300 hover:bg-white/10 rounded-lg transition cursor-pointer"
+              >
+                <Trash className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setIsChatOpen(false)}
+                title="채팅창 닫기"
+                className="p-1.5 text-indigo-200 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* 발화자(작성자 이름) 원클릭 선택 바 */}
+          <div className="bg-indigo-50/90 px-3 py-2 border-b border-indigo-100 flex items-center gap-1.5 overflow-x-auto text-[11px] select-none">
+            <span className="font-extrabold text-indigo-900 shrink-0 flex items-center gap-1">
+              <span>내 이름:</span>
+            </span>
+            <div className="flex items-center gap-1 overflow-x-auto py-0.5">
+              {groupMembers.map((member, idx) => {
+                const isSelected = chatSenderName === member.name;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleSelectChatSender(member.name)}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition cursor-pointer shrink-0 ${
+                      isSelected
+                        ? "bg-indigo-600 text-white shadow-xs"
+                        : "bg-white text-indigo-900 border border-indigo-200 hover:bg-indigo-100/70"
+                    }`}
+                  >
+                    {member.name}
+                  </button>
+                );
+              })}
+              {/* 직접 입력 옵션 */}
+              <input
+                type="text"
+                value={chatSenderName}
+                onChange={(e) => handleSelectChatSender(e.target.value)}
+                placeholder="직접입력"
+                className="w-16 bg-white border border-indigo-200 rounded-full px-2 py-0.5 text-[10px] font-bold text-indigo-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+          {/* 채팅 메시지 목록 (스크롤 영역) */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/60">
+            {chatMessages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 space-y-2">
+                <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-xl shadow-xs">
+                  💬
+                </div>
+                <p className="text-xs font-bold text-slate-600">아직 나눈 대화가 없습니다.</p>
+                <p className="text-[11px] text-slate-400 max-w-xs leading-relaxed">
+                  모둠 친구들과 인사하고, 대본 아이디어나 부스 준비물에 대해 자유롭게 이야기해 보세요!<br />
+                  <span className="text-indigo-600 font-medium">새로고침하거나 컴퓨터를 껐다 켜도 대화가 안전하게 보존됩니다.</span>
+                </p>
+              </div>
+            ) : (
+              chatMessages.map((msg) => {
+                const isMe = msg.senderName === chatSenderName;
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
+                  >
+                    {/* 보낸 친구 이름 (상대방일 때만 표시) */}
+                    {!isMe && (
+                      <span className="text-[11px] font-bold text-slate-700 mb-1 ml-1 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                        {msg.senderName}
+                      </span>
+                    )}
+
+                    {/* 말풍선과 전송 시각 */}
+                    <div className={`flex items-end gap-1.5 max-w-[85%] ${isMe ? "flex-row-reverse" : "flex-row"}`}>
+                      <div
+                        className={`px-3.5 py-2.5 rounded-2xl text-xs font-medium leading-relaxed break-words whitespace-pre-wrap shadow-xs ${
+                          isMe
+                            ? "bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-tr-xs"
+                            : "bg-white text-slate-800 border border-slate-200/90 rounded-tl-xs"
+                        }`}
+                      >
+                        {msg.content}
+                      </div>
+                      <span className="text-[9px] text-slate-400 shrink-0 mb-0.5 select-none font-mono">
+                        {msg.timeFormatted || new Date(msg.timestamp).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div ref={chatMessagesEndRef} />
+          </div>
+
+          {/* 메시지 입력 및 전송 영역 */}
+          <form
+            onSubmit={handleSendChatMessage}
+            className="p-3 bg-white border-t border-slate-100 flex items-center gap-2"
+          >
+            <input
+              type="text"
+              value={chatInputText}
+              onChange={(e) => setChatInputText(e.target.value)}
+              placeholder={`[${chatSenderName}] 메시지 입력 (Enter로 전송)...`}
+              maxLength={500}
+              disabled={isSendingChat}
+              className="flex-1 bg-slate-100 hover:bg-slate-150/70 focus:bg-white border border-transparent focus:border-indigo-400 rounded-2xl px-3.5 py-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition"
+            />
+            <button
+              type="submit"
+              disabled={!chatInputText.trim() || isSendingChat}
+              className="p-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white disabled:text-slate-400 rounded-xl transition cursor-pointer shadow-xs disabled:cursor-not-allowed shrink-0"
+              title="메시지 전송"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </form>
+
+        </div>
+      )}
+
     </div>
   );
 }
+

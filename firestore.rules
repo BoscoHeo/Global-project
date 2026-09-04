@@ -27,7 +27,12 @@ service cloud.firestore {
       allow read, write: if groupKey is string && groupKey.size() > 0 && groupKey.size() <= 128;
     }
     
-    // 6. Default Deny - block any arbitrary collections and root documents
+    // 6. Group Real-time Chat
+    match /classroom_chats/{chatKey} {
+      allow read, write: if chatKey is string && chatKey.size() > 0 && chatKey.size() <= 128;
+    }
+    
+    // 7. Default Deny - block any arbitrary collections and root documents
     match /{document=**} {
       allow read, write: if false;
     }

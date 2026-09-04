@@ -180,3 +180,17 @@ export interface BoothMaterialItem {
   note: string; // 비고 (택배비 포함 여부, 옵션 등)
   createdAt: string; // 등록 일시
 }
+
+/**
+ * 모둠 전용 실시간 협업 채팅 메시지 데이터 모델
+ */
+export interface GroupChatMessage {
+  id: string; // 메시지 고유 식별자
+  classCode: string; // 학급 코드 (예: 6-1, c61-k89a)
+  groupName: string; // 모둠명 (예: 1모둠)
+  senderName: string; // 보낸 학생 이름 (예: 김민재)
+  content: string; // 채팅 대화 내용
+  timestamp: string; // 전송 일시 (ISO 형식)
+  timeFormatted: string; // 초등학생 친화적 시각 표기 (예: 오후 3:05)
+}
+
