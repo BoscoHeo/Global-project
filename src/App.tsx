@@ -1536,19 +1536,31 @@ export default function App() {
     return "글로벌 지킴이 1모둠";
   });
 
-  // groupName 변경 시 URL 파라미터 및 로컬스토리지 동기화
+  // groupName 변경 시 URL 파라미터 및 로컬스토리지 동기화 (학생 모드에서만 동작)
   useEffect(() => {
     try {
+      const url = new URL(window.location.href);
+      const isTeacher = isTeacherUnlocked || activeTab === "teacher" || url.searchParams.get("role") === "teacher";
+
+      // 🛡️ [교사 모드 분리] 교사/담임 모드일 때는 학생용 모둠 파라미터를 URL에 붙이지 않고 오히려 정리
+      if (isTeacher) {
+        if (url.searchParams.has("group")) {
+          url.searchParams.delete("group");
+          url.searchParams.delete("groupName");
+          window.history.replaceState(null, "", url.toString());
+        }
+        return;
+      }
+
       if (groupName) {
         localStorage.setItem("expo_groupName", groupName);
-        const url = new URL(window.location.href);
         if (url.searchParams.get("group") !== groupName) {
           url.searchParams.set("group", groupName);
           window.history.replaceState(null, "", url.toString());
         }
       }
     } catch (_) {}
-  }, [groupName]);
+  }, [groupName, activeTab, isTeacherUnlocked]);
 
   // 🛡️ [보안 강화] 모둠 세션 토큰 (groupName 선언 이후 안전하게 초기화)
   const [groupToken, setGroupToken] = useState<string>(() => {
