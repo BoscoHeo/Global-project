@@ -1197,7 +1197,21 @@ export default function App() {
       prompt(`[우리 모둠('${targetGroup}') 실시간 협업 링크]를 복사하여 친구들에게 공유하세요:`, link);
     }
   };
-  const [activeTab, setActiveTab] = useState<string>("curriculum");
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (
+        params.get("role") === "teacher" || 
+        params.get("editor") === "teacher" || 
+        params.get("admin") === "true" || 
+        params.get("teacher") === "true" || 
+        params.get("tab") === "teacher"
+      ) {
+        return "teacher";
+      }
+    } catch (_) {}
+    return "curriculum";
+  });
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [countries, setCountries] = useState<CountryInfo[]>(() => {
     try {
@@ -1395,6 +1409,57 @@ export default function App() {
       setConfigTargetClass(unlockedClassScope);
     }
   }, [unlockedClassScope]);
+
+  // 👑 [교사 편의성 강화] URL에 pin 또는 passcode 파라미터가 있으면 1초 만에 자동 로그인 및 허브 즉시 개방
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlPin = params.get("pin") || params.get("passcode") || params.get("teacherPin");
+      const isTeacherIntent = 
+        params.get("editor") === "teacher" || 
+        params.get("role") === "teacher" || 
+        params.get("admin") === "true" || 
+        params.get("teacher") === "true" || 
+        params.get("tab") === "teacher";
+
+      if (urlPin && isTeacherIntent) {
+        (async () => {
+          try {
+            const res = await fetch("/api/class-passcode/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ passcode: urlPin })
+            });
+            const data = await res.json();
+            if (data.success) {
+              setIsTeacherUnlocked(true);
+              setCurrentPasscode(urlPin);
+              if (data.token) {
+                setTeacherToken(data.token);
+                try { sessionStorage.setItem("teacher_token", data.token); } catch (_) {}
+              }
+              try { sessionStorage.setItem("teacher_passcode", urlPin); } catch (_) {}
+              const scope = data.isMaster ? "all" : (data.classCode || "6-1");
+              setUnlockedClassScope(scope);
+              if (scope !== "all") setTeacherFilterClass(scope);
+              setShowTeacherUnlockModal(false);
+              setActiveTab("teacher");
+              fetchPasscodes();
+
+              // 보안을 위해 URL 주소창에서 비밀번호 파라미터만 안전하게 제거
+              const cleanUrl = new URL(window.location.href);
+              cleanUrl.searchParams.delete("pin");
+              cleanUrl.searchParams.delete("passcode");
+              cleanUrl.searchParams.delete("teacherPin");
+              window.history.replaceState(null, "", cleanUrl.toString());
+            }
+          } catch (e) {
+            console.error("Auto teacher login error:", e);
+          }
+        })();
+      }
+    } catch (_) {}
+  }, []);
   
   // 🔐 [보안 강화] 교사 및 모둠 세션 서명 토큰 관리
   const [teacherToken, setTeacherToken] = useState<string>(() => {
@@ -8667,18 +8732,78 @@ ${clausesCombined}`
 
             </div>
             ) : (
-              <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center max-w-lg mx-auto shadow-xl space-y-4 my-12 animate-fade-in">
-                <div className="w-16 h-16 rounded-full bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto text-3xl">🔒</div>
-                <h3 className="text-xl font-black text-slate-800">교사 전용 결과 수합 허브 접근 잠금</h3>
-                <p className="text-xs text-slate-500 leading-relaxed font-medium">
+              <div className="bg-white rounded-3xl border-2 border-rose-200 p-8 md:p-12 text-center max-w-lg mx-auto shadow-2xl space-y-5 my-12 animate-fade-in text-left">
+                <div className="flex items-center gap-3 border-b border-rose-100 pb-4">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center text-2xl font-black shrink-0">🔒</div>
+                  <div>
+                    <span className="text-[10px] text-rose-500 font-extrabold uppercase tracking-widest block">Classroom Security Guard</span>
+                    <h3 className="text-lg font-black text-slate-900">교사 결과 수합 허브 접근 잠금</h3>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
                   학생 성적 및 모둠별 수행평가 결과 수합 자료를 열람하려면 선생님 전용 보안 암호 인증이 필요합니다.
                 </p>
-                <button
-                  onClick={() => setShowTeacherUnlockModal(true)}
-                  className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition shadow-md cursor-pointer"
+
+                <form 
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!teacherPinInput.trim()) return;
+                    try {
+                      const res = await fetch("/api/class-passcode/verify", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ passcode: teacherPinInput })
+                      });
+                      const data = await res.json();
+                      if (data.success) {
+                        setIsTeacherUnlocked(true);
+                        setCurrentPasscode(teacherPinInput);
+                        if (data.token) {
+                          setTeacherToken(data.token);
+                          try { sessionStorage.setItem("teacher_token", data.token); } catch (_) {}
+                        }
+                        try { sessionStorage.setItem("teacher_passcode", teacherPinInput); } catch (_) {}
+                        const scope = data.isMaster ? "all" : (data.classCode || "6-1");
+                        setUnlockedClassScope(scope);
+                        if (scope !== "all") setTeacherFilterClass(scope);
+                        setShowTeacherUnlockModal(false);
+                        setActiveTab("teacher");
+                        setTeacherPinInput("");
+                        setTeacherPinError("");
+                        fetchPasscodes();
+                      } else {
+                        setTeacherPinError(`⚠️ 암호 불일치! 선생님 전용 통제 패스코드를 바르게 입력하십시오.`);
+                      }
+                    } catch (err) {
+                      setTeacherPinError("⚠️ 보안 서버 인증 통신망에 장애가 있거나 연결이 지연되고 있습니다.");
+                    }
+                  }}
+                  className="space-y-3 pt-2"
                 >
-                  🔑 교사 보안 암호(PIN) 입력하기
-                </button>
+                  <label className="text-[11px] font-black uppercase text-slate-500 block">🔑 교사용 기밀 보증 패스코드 (기본: 8900)</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="password"
+                      value={teacherPinInput}
+                      onChange={(e) => {
+                        setTeacherPinInput(e.target.value);
+                        setTeacherPinError("");
+                      }}
+                      placeholder="비밀번호 입력..."
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-850 font-mono focus:ring-2 focus:ring-rose-500 focus:bg-white focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer"
+                    >
+                      잠금 해제 🔓
+                    </button>
+                  </div>
+                  {teacherPinError && (
+                    <p className="text-[11px] font-bold text-rose-600">{teacherPinError}</p>
+                  )}
+                </form>
               </div>
             )
           )}
