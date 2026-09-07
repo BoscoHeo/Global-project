@@ -1373,7 +1373,20 @@ export default function App() {
       return false;
     }
   });
-  const [showTeacherUnlockModal, setShowTeacherUnlockModal] = useState<boolean>(false);
+  const [showTeacherUnlockModal, setShowTeacherUnlockModal] = useState<boolean>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return (
+        params.get("editor") === "teacher" || 
+        params.get("role") === "teacher" || 
+        params.get("admin") === "true" || 
+        params.get("teacher") === "true" || 
+        params.get("tab") === "teacher"
+      );
+    } catch (_) {
+      return false;
+    }
+  });
   const [teacherPinInput, setTeacherPinInput] = useState<string>("");
   const [teacherPinError, setTeacherPinError] = useState<string>("");
 
@@ -1539,6 +1552,20 @@ export default function App() {
       setShowGroupPasscodeModal(false);
       return;
     }
+
+    // 🛡️ [교사 편의성 강화] 교사 진입 의도(파라미터)가 있거나 교사 모달이 열려있다면 모둠 잠금 모달 자동 팝업 스킵
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const isTeacherIntent = 
+        params.get("editor") === "teacher" || 
+        params.get("role") === "teacher" || 
+        params.get("admin") === "true" || 
+        params.get("teacher") === "true" || 
+        params.get("tab") === "teacher";
+      if (isTeacherIntent) {
+        return;
+      }
+    } catch (_) {}
 
     const groupKey = `${targetClass}_${targetGroup}`;
     const savedPin = localStorage.getItem(`group_pin_${groupKey}`) || "";
@@ -3450,6 +3477,16 @@ ${clausesCombined}`
       {showGroupPasscodeModal && !isTeacherUnlocked && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in text-left">
           <div className="bg-white rounded-3xl max-w-md w-full border-2 border-indigo-200 shadow-2xl p-6 md:p-8 relative">
+            
+            {/* 모달 닫기 버튼 (둘러보기용) */}
+            <button 
+              onClick={() => setShowGroupPasscodeModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+              title="창 닫기"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
             <div className="w-12 h-12 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center justify-center mb-4 shadow-inner">
               <Lock className="w-6 h-6 text-indigo-600" />
             </div>
@@ -3510,6 +3547,28 @@ ${clausesCombined}`
               <div className="bg-slate-50 rounded-xl p-3 border border-slate-150 text-[10.5px] text-slate-500 leading-relaxed">
                 💡 <strong>선생님 안내:</strong> 비밀번호를 잊어버린 경우 선생님께 문의하세요. 선생님은 교사용 관리자 화면에서 각 모둠의 비밀번호를 확인하거나 초기화해 주실 수 있습니다.
               </div>
+
+              {/* 👑 담임/선생님 즉시 인증 진입 및 창 닫기 내비게이션 바 */}
+              <div className="pt-3 border-t border-slate-150 flex flex-col sm:flex-row items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGroupPasscodeModal(false);
+                    setShowTeacherUnlockModal(true);
+                  }}
+                  className="text-xs font-black text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>🔑 담임/교사용 관리자 허브 바로가기</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowGroupPasscodeModal(false)}
+                  className="text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer"
+                >
+                  창 닫고 둘러보기
+                </button>
+              </div>
+
             </div>
           </div>
         </div>
