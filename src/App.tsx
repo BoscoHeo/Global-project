@@ -1662,7 +1662,16 @@ export default function App() {
               sessionStorage.setItem(`group_token_${classCode}_${groupName}`, data.token);
             } catch (_) {}
           }
-          localStorage.setItem(`group_pin_${groupKey}`, pin);
+          if (data.isMaster) {
+            // 마스터 교사 비밀번호로 입장한 경우 모둠 PIN을 덮어쓰지 않고 교사 세션 활성화
+            setIsTeacherUnlocked(true);
+            try {
+              if (data.token) sessionStorage.setItem("teacher_token", data.token);
+              sessionStorage.setItem("teacher_passcode", pin);
+            } catch (_) {}
+          } else {
+            localStorage.setItem(`group_pin_${groupKey}`, pin);
+          }
           setIsGroupUnlocked(true);
           setShowGroupPasscodeModal(false);
           setInputGroupPasscode("");
