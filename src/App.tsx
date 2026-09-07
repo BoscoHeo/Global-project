@@ -1168,7 +1168,7 @@ export default function App() {
 
   const handleCopyClassLink = (cCode: string) => {
     if (!isTeacherUnlocked && cCode !== classCode) {
-      alert(`🔒 [학급 데이터 보안 격리]\n\n학생 모드에서는 자기 학급(${classCode})만 접속 가능합니다.\n\n타 학급(${cCode}) 링크로 이동하거나 공유하려면 교사 전용 비밀번호(8900)를 입력하여 선생님 인증을 완료해야 합니다.`);
+      alert(`🔒 [학급 데이터 보안 격리]\n\n학생 모드에서는 자기 학급(${classCode})만 접속 가능합니다.\n\n타 학급(${cCode}) 링크로 이동하거나 공유하려면 선생님 전용 비밀번호를 입력하여 인증을 완료해야 합니다.`);
       return;
     }
     const link = getShareUrlForClass(cCode);
@@ -1383,16 +1383,26 @@ export default function App() {
     }
   }, [unlockedClassScope]);
   
+  // 🔐 [보안 강화] 교사 및 모둠 세션 서명 토큰 관리
+  const [teacherToken, setTeacherToken] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem("teacher_token") || "";
+    } catch (_) {
+      return "";
+    }
+  });
+
+
   // Custom class-specific passcodes config states
-  const [classPasscodes, setClassPasscodes] = useState<{ master: string; custom: Record<string, string> }>({ master: "8900", custom: {} });
+  const [classPasscodes, setClassPasscodes] = useState<{ master: string; custom: Record<string, string> }>({ master: "", custom: {} });
   const [newClassCodeToSet, setNewClassCodeToSet] = useState<string>("");
   const [newPasscodeToSet, setNewPasscodeToSet] = useState<string>("");
 
   const fetchPasscodes = async () => {
     try {
-      const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
+      const tokenHeader = teacherToken ? `Bearer ${teacherToken}` : (currentPasscode ? `Bearer ${currentPasscode}` : "");
       const res = await fetch("/api/class-passcode/list", {
-        headers: { "x-teacher-passcode": pcode }
+        headers: tokenHeader ? { "Authorization": tokenHeader } : {}
       });
       if (res.ok) {
         const data = await res.json();
@@ -1461,6 +1471,23 @@ export default function App() {
       }
     } catch (_) {}
   }, [groupName]);
+
+  // 🛡️ [보안 강화] 모둠 세션 토큰 (groupName 선언 이후 안전하게 초기화)
+  const [groupToken, setGroupToken] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem(`group_token_${classCode}_${groupName}`) || "";
+    } catch (_) {
+      return "";
+    }
+  });
+
+  // 학급 또는 모둠 변경 시 해당 모둠 토큰 동기화
+  useEffect(() => {
+    try {
+      const savedToken = sessionStorage.getItem(`group_token_${classCode}_${groupName}`) || "";
+      setGroupToken(savedToken);
+    } catch (_) {}
+  }, [classCode, groupName]);
 
   const [teacherFilterClass, setTeacherFilterClass] = useState<string>(""); // "" means show all, or filtered classroom code e.g., "6-1"
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([
@@ -1572,6 +1599,13 @@ export default function App() {
           body: JSON.stringify({ classCode, groupName, passcode: pin })
         });
         if (res.ok) {
+          const data = await res.json();
+          if (data.token) {
+            setGroupToken(data.token);
+            try {
+              sessionStorage.setItem(`group_token_${classCode}_${groupName}`, data.token);
+            } catch (_) {}
+          }
           localStorage.setItem(`group_pin_${groupKey}`, pin);
           setIsGroupUnlocked(true);
           setShowGroupPasscodeModal(false);
@@ -1595,6 +1629,12 @@ export default function App() {
         });
         const data = await res.json();
         if (data.valid) {
+          if (data.token) {
+            setGroupToken(data.token);
+            try {
+              sessionStorage.setItem(`group_token_${classCode}_${groupName}`, data.token);
+            } catch (_) {}
+          }
           localStorage.setItem(`group_pin_${groupKey}`, pin);
           setIsGroupUnlocked(true);
           setShowGroupPasscodeModal(false);
@@ -1609,11 +1649,17 @@ export default function App() {
     }
   };
 
+  // 🛡️ [보안 강화] 교사 인증 헤더 생성 헬퍼 (8900 평문 하드코딩 대신 서명 토큰 사용)
+  const getTeacherAuthHeader = (): Record<string, string> => {
+    const token = teacherToken || sessionStorage.getItem("teacher_token") || currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
+    return token ? { "Authorization": `Bearer ${token}` } : {};
+  };
+
   // 교사용 모둠 비밀번호 목록 조회
   const fetchTeacherGroupPasscodes = async () => {
     try {
       const res = await fetch(`/api/group/passcode/list?classCode=${encodeURIComponent(classCode)}`, {
-        headers: { "x-teacher-passcode": "8900" }
+        headers: getTeacherAuthHeader()
       });
       if (res.ok) {
         const list = await res.json();
@@ -1632,7 +1678,7 @@ export default function App() {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "x-teacher-passcode": "8900"
+          ...getTeacherAuthHeader()
         },
         body: JSON.stringify({ classCode, groupName: gName })
       });
@@ -1661,13 +1707,13 @@ export default function App() {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "x-teacher-passcode": "8900"
+          ...getTeacherAuthHeader()
         },
         body: JSON.stringify({ 
           classCode, 
           groupName: gName, 
           passcode: pin,
-          currentPasscode: "8900" // 교사 마스터 권한으로 강제 설정
+          currentPasscode: teacherToken || currentPasscode
         })
       });
 
@@ -1701,13 +1747,13 @@ export default function App() {
           method: "POST",
           headers: { 
             "Content-Type": "application/json",
-            "x-teacher-passcode": "8900"
+            ...getTeacherAuthHeader()
           },
           body: JSON.stringify({ 
             classCode, 
             groupName: item.name, 
             passcode: item.pin,
-            currentPasscode: "8900"
+            currentPasscode: teacherToken || currentPasscode
           })
         });
       }
@@ -1726,7 +1772,7 @@ export default function App() {
     setLoadingChatSummary(true);
     try {
       const res = await fetch(`/api/group/chat/summary?classCode=${encodeURIComponent(classCode)}`, {
-        headers: { "x-teacher-passcode": "8900" }
+        headers: getTeacherAuthHeader()
       });
       if (res.ok) {
         const data = await res.json();
@@ -1738,6 +1784,7 @@ export default function App() {
       setLoadingChatSummary(false);
     }
   };
+
 
   // 교사 탭 진입 시 모둠별 비밀번호 목록 및 준비물 수합, 채팅 요약 자동 조회
   useEffect(() => {
@@ -1777,11 +1824,23 @@ export default function App() {
     } catch (_) {}
   };
 
+  // 🛡️ [보안 강화] 모둠 채팅 API 호출용 토큰 헤더 헬퍼
+  const getChatHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const curGroupToken = groupToken || sessionStorage.getItem(`group_token_${classCode}_${groupName}`) || "";
+    if (curGroupToken) headers["x-group-token"] = curGroupToken;
+    const curTeacherToken = teacherToken || sessionStorage.getItem("teacher_token") || currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
+    if (curTeacherToken) headers["Authorization"] = `Bearer ${curTeacherToken}`;
+    return headers;
+  };
+
   // 모둠 메시지 목록 불러오기
   const loadGroupChatMessages = async (targetClass: string, targetGroup: string) => {
     if (!targetClass || !targetGroup) return;
     try {
-      const res = await fetch(`/api/group/chat/messages?classCode=${encodeURIComponent(targetClass)}&groupName=${encodeURIComponent(targetGroup)}`);
+      const res = await fetch(`/api/group/chat/messages?classCode=${encodeURIComponent(targetClass)}&groupName=${encodeURIComponent(targetGroup)}`, {
+        headers: getChatHeaders()
+      });
       if (res.ok) {
         const data = await res.json();
         const msgs: GroupChatMessage[] = data.messages || [];
@@ -1807,7 +1866,7 @@ export default function App() {
     try {
       const res = await fetch("/api/group/chat/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getChatHeaders(),
         body: JSON.stringify({
           classCode,
           groupName,
@@ -1844,7 +1903,7 @@ export default function App() {
     try {
       const res = await fetch("/api/group/chat/clear", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getChatHeaders(),
         body: JSON.stringify({ classCode, groupName })
       });
       if (res.ok) {
@@ -1868,11 +1927,15 @@ export default function App() {
     const timer = setInterval(async () => {
       if (!classCode || !groupName) return;
       try {
-        const res = await fetch(`/api/group/chat/status?classCode=${encodeURIComponent(classCode)}&groupName=${encodeURIComponent(groupName)}`);
+        const res = await fetch(`/api/group/chat/status?classCode=${encodeURIComponent(classCode)}&groupName=${encodeURIComponent(groupName)}`, {
+          headers: getChatHeaders()
+        });
         if (res.ok) {
           const data = await res.json();
           if (data.lastMessageId && data.lastMessageId !== chatLastMsgId) {
-            const msgRes = await fetch(`/api/group/chat/messages?classCode=${encodeURIComponent(classCode)}&groupName=${encodeURIComponent(groupName)}`);
+            const msgRes = await fetch(`/api/group/chat/messages?classCode=${encodeURIComponent(classCode)}&groupName=${encodeURIComponent(groupName)}`, {
+              headers: getChatHeaders()
+            });
             if (msgRes.ok) {
               const msgData = await msgRes.json();
               const newMsgs: GroupChatMessage[] = msgData.messages || [];
@@ -1888,7 +1951,7 @@ export default function App() {
     }, 2000);
 
     return () => clearInterval(timer);
-  }, [classCode, groupName, chatLastMsgId]);
+  }, [classCode, groupName, chatLastMsgId, groupToken, teacherToken]);
 
   // 채팅창이 열리거나 새 메시지 수신 시 스크롤 하단 이동
   useEffect(() => {
@@ -1901,12 +1964,34 @@ export default function App() {
   }, [isChatOpen, chatMessages.length]);
 
   // ==============================================================
-  // 🔗 [채팅 메시지 내 URL 자동 하이퍼링크 변환 헬퍼]
-  // 학생들이 나눈 대화 중 http:// 또는 https:// 웹사이트 링크를 클릭 가능한 하이퍼링크로 자동 변환합니다.
+  // 🔗 [채팅 메시지 내 URL 자동 하이퍼링크 변환 & 피싱 방어]
   // ==============================================================
+  const handleSafeLinkClick = (e: React.MouseEvent, url: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    try {
+      const parsed = new URL(url);
+      const protocol = parsed.protocol.toLowerCase();
+      if (protocol !== "https:") {
+        alert("🔒 보안 경고: 안전한 HTTPS 암호화 연결(https://) 웹페이지만 이동할 수 있습니다.");
+        return;
+      }
+      const host = parsed.hostname.toLowerCase();
+      if (host === "localhost" || host === "127.0.0.1" || host.startsWith("192.168.") || host.startsWith("10.") || host.endsWith(".local")) {
+        alert("🔒 보안 경고: 학교/내부 네트워크 주소로는 이동할 수 없습니다.");
+        return;
+      }
+      if (window.confirm(`🌐 [외부 웹사이트 연결 안전 확인]\n\n우리 학교 포털을 벗어나 다음 외부 사이트로 이동합니다:\n🔗 도메인: ${parsed.hostname}\n\n모르는 사이트에서 비밀번호나 개인정보를 입력하지 않도록 주의하세요. 계속 이동하시겠습니까?`)) {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+    } catch {
+      alert("올바르지 않은 웹 주소 형식입니다.");
+    }
+  };
+
   const renderMessageContentWithLinks = (text: string, isMe: boolean) => {
     if (!text) return null;
-    // URL 정규식 패턴 (http://, https:// 및 www. 로 시작하는 링크 감지)
+    // URL 정규식 패턴 (https:// 및 www. 로 시작하는 링크 감지)
     const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
     const parts = text.split(urlRegex);
 
@@ -1919,13 +2004,13 @@ export default function App() {
             href={fullUrl}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => handleSafeLinkClick(e, fullUrl)}
             className={`underline font-bold inline-flex items-center gap-0.5 break-all transition cursor-pointer mx-0.5 ${
               isMe 
                 ? "text-amber-200 hover:text-white" 
                 : "text-indigo-600 hover:text-indigo-800"
             }`}
-            title={`${fullUrl} (새 탭에서 열기)`}
+            title={`${fullUrl} (클릭 시 안전 확인 후 새 탭 열기)`}
           >
             <span>{part}</span>
             <ExternalLink className="w-3 h-3 inline-block shrink-0 ml-0.5" />
@@ -1948,7 +2033,9 @@ export default function App() {
     setTeacherViewingChatGroup(gName);
     setLoadingTeacherChatView(true);
     try {
-      const res = await fetch(`/api/group/chat/messages?classCode=${encodeURIComponent(classCode)}&groupName=${encodeURIComponent(gName)}`);
+      const res = await fetch(`/api/group/chat/messages?classCode=${encodeURIComponent(classCode)}&groupName=${encodeURIComponent(gName)}`, {
+        headers: getTeacherAuthHeader()
+      });
       if (res.ok) {
         const data = await res.json();
         setTeacherViewingChatMessages(Array.isArray(data.messages) ? data.messages : []);
@@ -1959,6 +2046,7 @@ export default function App() {
       setLoadingTeacherChatView(false);
     }
   };
+
 
   // 모둠 대화 전체 텍스트 클립보드 복사
   const handleCopyTeacherChatLog = () => {
@@ -2711,12 +2799,15 @@ export default function App() {
     return matchesSearch;
   });
 
-  // Keep selectedCountry inside filteredCountries if available
+  // 🛡️ [빈 화면 크래시 방어] 필터 결과가 비어있어도 최소 1개 이상의 국가가 유지되도록 fallback 적용
+  const effectiveFilteredCountries = filteredCountries.length > 0 ? filteredCountries : (countries.length > 0 ? countries : SEEDED_COUNTRIES);
+
+  // Keep selectedCountry inside effectiveFilteredCountries if available
   useEffect(() => {
-    if (filteredCountries.length > 0) {
-      const isStillValid = filteredCountries.some(c => c.code === selectedCountry.code);
+    if (effectiveFilteredCountries.length > 0) {
+      const isStillValid = effectiveFilteredCountries.some(c => c.code === selectedCountry?.code);
       if (!isStillValid) {
-        setSelectedCountry(filteredCountries[0]);
+        setSelectedCountry(effectiveFilteredCountries[0]);
       }
     }
   }, [selectedContinentFilter, classCode, countries, isClassOnlyMode, isTeacherUnlocked]);
@@ -5092,7 +5183,7 @@ ${clausesCombined}`
                         };
 
                         return (
-                          <div key={member.id || idx} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                          <div key={(member as any).id || member.name || idx} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
                             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                               <div className="flex items-center gap-2">
                                 <span className="w-6 h-6 rounded-full bg-indigo-600 text-white font-extrabold text-xs flex items-center justify-center shrink-0">
@@ -7092,10 +7183,9 @@ ${clausesCombined}`
                         setImportedPortfolios([]);
                         setSelectedImportedPortfolioIndex(null);
                         try {
-                          const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
                           await fetch("/api/portfolio/reset", { 
                             method: "POST",
-                            headers: { "x-teacher-passcode": pcode }
+                            headers: getTeacherAuthHeader()
                           });
                         } catch (e) {
                           console.error("교탁 임시 초기화 통신망 장애", e);
@@ -7133,28 +7223,27 @@ ${clausesCombined}`
                       </div>
                       <div className="flex gap-2">
                         <input 
-                          type="text"
-                          value={classPasscodes.master || "8900"}
+                          type="password"
+                          value={classPasscodes.master || ""}
                           onChange={async (e) => {
                             const val = e.target.value;
                             setClassPasscodes(prev => ({ ...prev, master: val }));
                             try {
-                              const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
                               await fetch("/api/class-passcode/save", {
                                 method: "POST",
                                 headers: { 
                                   "Content-Type": "application/json",
-                                  "x-teacher-passcode": pcode
+                                  ...getTeacherAuthHeader()
                                 },
                                 body: JSON.stringify({ classCode: "master", passcode: val })
                               });
                             } catch (_) {}
                           }}
-                          placeholder="기본: 8900"
+                          placeholder="새 마스터 암호 입력"
                           className="flex-1 bg-slate-50 border border-slate-250 rounded-lg px-2.5 py-1.5 text-xs font-mono font-black focus:ring-1 focus:ring-rose-500 focus:outline-none text-slate-800"
                         />
                         <button 
-                          onClick={() => alert(`🔑 마스터 비밀번호가 '${classPasscodes.master || "8900"}'(으)로 실시간 서버에 안전 저장되었습니다.`)}
+                          onClick={() => alert(`🔑 마스터 비밀번호가 성공적으로 실시간 서버에 안전 저장되었습니다.`)}
                           className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-extrabold transition cursor-pointer"
                         >
                           저장
@@ -7162,7 +7251,7 @@ ${clausesCombined}`
                       </div>
                     </div>
                     <p className="text-[10px] text-slate-400 leading-normal mt-2">
-                      * 입력 시 클라우드 실시간 반영됩니다. 학생들은 진입 암호 인증창에서 이 마스터 코드를 사용해 인증할 수 있습니다.
+                      * 입력 시 클라우드 실시간 반영됩니다. 교사용 마스터 비밀번호는 외부나 학생에게 노출되지 않도록 각별히 유의해 주십시오.
                     </p>
                   </div>
 
@@ -7195,12 +7284,11 @@ ${clausesCombined}`
                             return;
                           }
                           try {
-                            const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
                             const res = await fetch("/api/class-passcode/save", {
                               method: "POST",
                               headers: { 
                                 "Content-Type": "application/json",
-                                "x-teacher-passcode": pcode
+                                ...getTeacherAuthHeader()
                               },
                               body: JSON.stringify({ classCode: newClassCodeToSet.trim(), passcode: newPasscodeToSet.trim() })
                             });
@@ -7240,16 +7328,15 @@ ${clausesCombined}`
                                 <td className="p-1.5 text-right pr-2">
                                   <button 
                                     onClick={async () => {
-                                      if (confirm(`'${code}' 학급의 전용 암호를 삭제하고 공용 마스터 패스코드로 대체하시겠습니까?`)) {
+                                      if (confirm(`'${code}' 학급의 전용 암호를 삭제하시겠습니까?`)) {
                                         try {
-                                          const pcode = currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
                                           await fetch("/api/class-passcode/save", {
                                             method: "POST",
                                             headers: { 
                                               "Content-Type": "application/json",
-                                              "x-teacher-passcode": pcode
+                                              ...getTeacherAuthHeader()
                                             },
-                                            body: JSON.stringify({ classCode: code, passcode: "8900" })
+                                            body: JSON.stringify({ classCode: code, passcode: classPasscodes.master || "master" })
                                           });
                                           setClassPasscodes(prev => {
                                             const copy = { ...prev.custom };
@@ -7263,6 +7350,7 @@ ${clausesCombined}`
                                         }
                                       }
                                     }}
+
                                     className="text-rose-500 hover:underline font-bold text-[9px]"
                                   >
                                     삭제
@@ -8696,6 +8784,12 @@ ${clausesCombined}`
                   if (data.success) {
                     setIsTeacherUnlocked(true);
                     setCurrentPasscode(teacherPinInput);
+                    if (data.token) {
+                      setTeacherToken(data.token);
+                      try {
+                        sessionStorage.setItem("teacher_token", data.token);
+                      } catch (_) {}
+                    }
                     try {
                       sessionStorage.setItem("teacher_passcode", teacherPinInput);
                     } catch (_) {}

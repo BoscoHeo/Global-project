@@ -1,4 +1,4 @@
-﻿import React, { Component, ErrorInfo, ReactNode } from "react";
+import React, { Component, ErrorInfo, ReactNode } from "react";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 
 interface Props {
@@ -12,11 +12,14 @@ interface State {
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false,
-    error: null,
-    errorInfo: null
-  };
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null
+    };
+  }
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error, errorInfo: null };
@@ -33,10 +36,24 @@ export class ErrorBoundary extends Component<Props, State> {
 
   private handleResetCacheAndReload = () => {
     try {
-      localStorage.clear();
-      sessionStorage.clear();
+      // 🛡️ [보안 & 안정성 강화] 전체 localStorage를 지우지 않고 앱 전용 캐시만 선별 삭제
+      // 학생의 브라우저 설정이나 타 앱 데이터 유실을 방지합니다.
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith("expo_") || k.startsWith("group_") || k.startsWith("world_"))) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+
+      // 세션 토큰 초기화
+      sessionStorage.removeItem("teacher_token");
+      sessionStorage.removeItem("teacher_passcode");
     } catch (_) {}
-    window.location.href = window.location.pathname;
+
+    // 학급 및 모둠 파라미터(?class=...&group=...)를 유지하여 원래 모둠으로 안전하게 복귀
+    window.location.href = window.location.search ? `${window.location.pathname}${window.location.search}` : window.location.pathname;
   };
 
   public render() {

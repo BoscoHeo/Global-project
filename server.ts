@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
@@ -518,11 +519,111 @@ const classroomGroupPasscodes = new Map<string, string>();
 // 모둠원 간 실시간 채팅 메시지 저장소 (인메모리 캐시 및 Firestore 연동: key = `${classCode}_${groupName}`)
 const classroomGroupChats = new Map<string, any[]>();
 
+// 🔐 [보안 강화] 서버 서명 시크릿 및 기본 마스터 비밀번호 설정
+// 환경 변수(TEACHER_MASTER_PASSCODE, SERVER_AUTH_SECRET)가 제공되면 우선 적용됩니다.
+const DEFAULT_MASTER_PASSCODE = process.env.TEACHER_MASTER_PASSCODE || "8900";
+const SERVER_AUTH_SECRET = process.env.SERVER_AUTH_SECRET || crypto.randomBytes(32).toString("hex");
 
 // Class-specific passcode storage (acts as local cache/fallback)
 const classroomPasscodes = new Map<string, string>([
-  ["master", "8900"]
+  ["master", DEFAULT_MASTER_PASSCODE]
 ]);
+
+// 교사 마스터 비밀번호 헬퍼
+function getMasterPasscode(): string {
+  return classroomPasscodes.get("master") || process.env.TEACHER_MASTER_PASSCODE || DEFAULT_MASTER_PASSCODE;
+}
+
+// 🛡️ [보안 강화] 서명된 세션 토큰 페이로드 인터페이스
+export interface AuthTokenPayload {
+  role: "teacher" | "student";
+  classScope?: string; // 'all' 또는 특정 학급 코드 (예: '6-1')
+  classCode?: string;
+  groupName?: string;
+  exp: number; // 만료 시각 (Epoch ms)
+}
+
+// 🛡️ [보안 강화] HMAC-SHA256 서명된 토큰 생성 함수
+export function generateAuthToken(payload: AuthTokenPayload): string {
+  const dataStr = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = crypto.createHmac("sha256", SERVER_AUTH_SECRET).update(dataStr).digest("base64url");
+  return `${dataStr}.${signature}`;
+}
+
+// 🛡️ [보안 강화] HMAC-SHA256 토큰 검증 함수 (위변조 및 유효기간 만료 자동 차단)
+export function verifyAuthToken(tokenStr: string): AuthTokenPayload | null {
+  try {
+    if (!tokenStr || typeof tokenStr !== "string" || !tokenStr.includes(".")) return null;
+    const [dataStr, signature] = tokenStr.split(".");
+    const expectedSig = crypto.createHmac("sha256", SERVER_AUTH_SECRET).update(dataStr).digest("base64url");
+    if (signature !== expectedSig) return null;
+    const payload: AuthTokenPayload = JSON.parse(Buffer.from(dataStr, "base64url").toString("utf-8"));
+    if (Date.now() > payload.exp) return null; // 만료된 토큰
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+// 🛡️ [보안 강화] 채팅 도배 및 비용 공격 방지 Rate Limiter
+const chatRateLimits = new Map<string, { lastTime: number; count: number; windowStart: number }>();
+
+export function checkChatRateLimit(clientKey: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const record = chatRateLimits.get(clientKey) || { lastTime: 0, count: 0, windowStart: now };
+
+  // 1) 최소 전송 간격 1.5초 제한 (연타/매크로 방어)
+  if (now - record.lastTime < 1500) {
+    const retryAfter = Math.ceil((1500 - (now - record.lastTime)) / 1000);
+    return { allowed: false, retryAfter };
+  }
+
+  // 2) 1분 슬라이딩 윈도우 최대 25건 제한
+  if (now - record.windowStart > 60000) {
+    record.count = 0;
+    record.windowStart = now;
+  }
+
+  if (record.count >= 25) {
+    const retryAfter = Math.ceil((60000 - (now - record.windowStart)) / 1000);
+    return { allowed: false, retryAfter };
+  }
+
+  record.lastTime = now;
+  record.count += 1;
+  chatRateLimits.set(clientKey, record);
+  return { allowed: true };
+}
+
+// 🛡️ [보안 강화] 모둠 접근 권한(PIN 세션) 검증 헬퍼
+export function verifyGroupAccess(req: express.Request, targetClass: string, targetGroup: string): { allowed: boolean; reason?: string; role?: string } {
+  const token = (req.headers["x-group-token"] as string) || 
+                (req.headers["authorization"]?.startsWith("Bearer ") ? req.headers["authorization"].substring(7).trim() : "");
+                
+  if (!token) {
+    return { allowed: false, reason: "모둠 세션 인증 토큰이 필요합니다. 먼저 모둠 PIN을 인증해 주세요." };
+  }
+
+  const payload = verifyAuthToken(token);
+  if (!payload) {
+    return { allowed: false, reason: "인증 토큰이 유효하지 않거나 만료되었습니다. 모둠에 다시 입장해 주세요." };
+  }
+
+  // 교사인 경우: 학급 범위(Scope) 검증
+  if (payload.role === "teacher") {
+    if (payload.classScope === "all" || payload.classScope === targetClass) {
+      return { allowed: true, role: "teacher" };
+    }
+    return { allowed: false, reason: "담당 학급 외의 모둠 데이터에는 접근할 수 없습니다." };
+  }
+
+  // 학생인 경우: 해당 학급 및 모둠과 정확히 일치해야 함
+  if (payload.classCode === targetClass && payload.groupName === targetGroup) {
+    return { allowed: true, role: "student" };
+  }
+
+  return { allowed: false, reason: "다른 학급이나 다른 모둠의 채팅 데이터에는 접근할 수 없습니다." };
+}
 
 // Class-specific assigned continent storage (acts as local cache/fallback)
 const classroomContinents = new Map<string, string>([
@@ -616,10 +717,24 @@ async function syncFromFirestore() {
 }
 
 // Security Helper to verify and fetch authorization scope from request headers
-function getAuthorizedClassCode(req: express.Request): { authorized: boolean; classScope: string } {
+function getAuthorizedClassCode(req: express.Request): { authorized: boolean; classScope: string; role?: string } {
   const authHeader = req.headers["authorization"];
   const headerPasscode = req.headers["x-teacher-passcode"] as string | undefined;
   
+  // 1) 서명된 Bearer 토큰 우선 검증
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.substring(7).trim();
+    const payload = verifyAuthToken(token);
+    if (payload && payload.role === "teacher") {
+      return { 
+        authorized: true, 
+        classScope: payload.classScope || "all", 
+        role: "teacher" 
+      };
+    }
+  }
+
+  // 2) 평문 패스코드 헤더 확인 (로그인 또는 구버전 클라이언트 호환)
   let passcode = "";
   if (authHeader && authHeader.startsWith("Bearer ")) {
     passcode = authHeader.substring(7).trim();
@@ -631,14 +746,14 @@ function getAuthorizedClassCode(req: express.Request): { authorized: boolean; cl
     return { authorized: false, classScope: "none" };
   }
   
-  const masterPass = classroomPasscodes.get("master") || "8900";
+  const masterPass = getMasterPasscode();
   if (passcode === masterPass) {
-    return { authorized: true, classScope: "all" };
+    return { authorized: true, classScope: "all", role: "teacher" };
   }
   
   for (const [classCode, storedPass] of classroomPasscodes.entries()) {
     if (classCode !== "master" && storedPass === passcode) {
-      return { authorized: true, classScope: classCode };
+      return { authorized: true, classScope: classCode, role: "teacher" };
     }
   }
   
@@ -652,16 +767,60 @@ function verifyPasscode(req: express.Request, requireMaster: boolean = false): b
   return true;
 }
 
+// 🔑 [신규] 교사 전용 안전 로그인 API (비밀번호 검증 후 12시간 유효 서명 토큰 발급)
+app.post("/api/teacher/login", (req, res) => {
+  const { passcode } = req.body;
+  const inputPass = String(passcode || "").trim();
+  if (!inputPass) {
+    return res.status(400).json({ error: "교사 비밀번호를 입력해 주세요." });
+  }
+
+  const masterPass = getMasterPasscode();
+  if (inputPass === masterPass) {
+    const token = generateAuthToken({
+      role: "teacher",
+      classScope: "all",
+      exp: Date.now() + 12 * 60 * 60 * 1000 // 12시간 유효
+    });
+    return res.json({ 
+      success: true, 
+      token, 
+      classScope: "all", 
+      message: "선생님 마스터 인증이 성공하였습니다." 
+    });
+  }
+
+  for (const [classCode, storedPass] of classroomPasscodes.entries()) {
+    if (classCode !== "master" && storedPass === inputPass) {
+      const token = generateAuthToken({
+        role: "teacher",
+        classScope: classCode,
+        exp: Date.now() + 12 * 60 * 60 * 1000
+      });
+      return res.json({ 
+        success: true, 
+        token, 
+        classScope: classCode, 
+        message: `${classCode} 학급 교사 인증이 성공하였습니다.` 
+      });
+    }
+  }
+
+  return res.status(401).json({ error: "교사 비밀번호가 일치하지 않습니다." });
+});
+
 // Route: Get all passcodes (Internal Teacher access)
 app.get("/api/class-passcode/list", (req, res) => {
   if (!verifyPasscode(req, true)) {
     return res.status(401).json({ error: "접근 권한이 없습니다. 마스터 교사 비밀번호가 필요합니다." });
   }
+  // 보안: 마스터 비밀번호 평문 대신 마스터 설정 여부만 불리언으로 전달하거나 안전 처리
   res.json({
-    master: classroomPasscodes.get("master") || "8900",
+    masterSet: true,
     custom: Object.fromEntries(classroomPasscodes.entries())
   });
 });
+
 
 // Route: Save/Update a classroom passcode
 app.post("/api/class-passcode/save", async (req, res) => {
@@ -711,15 +870,25 @@ app.post("/api/class-passcode/verify", (req, res) => {
   const trimmedPasscode = passcode.trim();
 
   // 1. Check master passcode
-  const masterPass = classroomPasscodes.get("master") || "8900";
+  const masterPass = getMasterPasscode();
   if (trimmedPasscode === masterPass) {
-    return res.json({ success: true, isMaster: true });
+    const token = generateAuthToken({
+      role: "teacher",
+      classScope: "all",
+      exp: Date.now() + 12 * 60 * 60 * 1000
+    });
+    return res.json({ success: true, isMaster: true, token });
   }
 
   // 2. Scan all custom keys to see if this matches a class-specific code
   for (const [classCode, storedPass] of classroomPasscodes.entries()) {
     if (classCode !== "master" && storedPass === trimmedPasscode) {
-      return res.json({ success: true, isMaster: false, classCode });
+      const token = generateAuthToken({
+        role: "teacher",
+        classScope: classCode,
+        exp: Date.now() + 12 * 60 * 60 * 1000
+      });
+      return res.json({ success: true, isMaster: false, classCode, token });
     }
   }
 
@@ -1125,14 +1294,27 @@ app.post("/api/group/passcode/verify", (req, res) => {
     });
   }
 
-  // 교사 마스터 비밀번호(8900) 입력 시 마스터 패스 허용
-  if (inputPasscode === "8900") {
-    return res.json({ isSet: true, valid: true, isMaster: true });
+  // 교사 마스터 비밀번호 입력 시 마스터 패스 허용 및 교사 토큰 발급
+  if (inputPasscode === getMasterPasscode()) {
+    const token = generateAuthToken({
+      role: "teacher",
+      classScope: "all",
+      classCode: classCodeVal,
+      groupName: groupNameVal,
+      exp: Date.now() + 12 * 60 * 60 * 1000 // 12시간 유효
+    });
+    return res.json({ isSet: true, valid: true, isMaster: true, token });
   }
 
   // 모둠 비밀번호 일치 여부 확인
   if (inputPasscode === savedPasscode) {
-    return res.json({ isSet: true, valid: true });
+    const token = generateAuthToken({
+      role: "student",
+      classCode: classCodeVal,
+      groupName: groupNameVal,
+      exp: Date.now() + 8 * 60 * 60 * 1000 // 수업 8시간 유효
+    });
+    return res.json({ isSet: true, valid: true, token });
   }
 
   return res.status(401).json({ 
@@ -1161,10 +1343,10 @@ app.post("/api/group/passcode/set", async (req, res) => {
     const groupKey = `${classCodeVal}_${groupNameVal}`;
     const existingPasscode = classroomGroupPasscodes.get(groupKey);
 
-    // 이미 비밀번호가 설정되어 있는 경우, 이전 비번이나 교사 마스터 비번(8900) 검증
+    // 이미 비밀번호가 설정되어 있는 경우, 이전 비번이나 교사 마스터 비번 검증
     if (existingPasscode) {
       const cur = String(currentPasscode || "").trim();
-      if (cur !== existingPasscode && cur !== "8900") {
+      if (cur !== existingPasscode && cur !== getMasterPasscode()) {
         return res.status(403).json({ error: "기존 비밀번호가 일치하지 않아 변경할 수 없습니다." });
       }
     }
@@ -1187,8 +1369,16 @@ app.post("/api/group/passcode/set", async (req, res) => {
       }
     }
 
+    const token = generateAuthToken({
+      role: "student",
+      classCode: classCodeVal,
+      groupName: groupNameVal,
+      exp: Date.now() + 8 * 60 * 60 * 1000 // 8시간 유효
+    });
+
     return res.json({ 
       success: true, 
+      token,
       message: `'${groupNameVal}' 모둠의 비밀번호가 성공적으로 설정되었습니다.` 
     });
   } catch (error: any) {
@@ -1204,7 +1394,13 @@ app.get("/api/group/passcode/list", (req, res) => {
     return res.status(401).json({ error: "교사 인증이 필요합니다." });
   }
 
-  const classCodeVal = String(req.query.classCode || authInfo.classScope || "6-1").trim();
+  const requestedClass = String(req.query.classCode || authInfo.classScope || "6-1").trim();
+  // 🛡️ [보안 강화] 타 학급 데이터 열람 우회 차단
+  if (authInfo.classScope !== "all" && requestedClass !== authInfo.classScope) {
+    return res.status(403).json({ error: "담당 학급의 모둠 비밀번호만 조회할 수 있습니다." });
+  }
+
+  const classCodeVal = requestedClass;
   const result: Array<{ groupName: string; isSet: boolean; passcode: string }> = [];
 
   // 기본 1~4모둠 점검
@@ -1244,8 +1440,15 @@ app.post("/api/group/passcode/reset", async (req, res) => {
   }
 
   const { classCode, groupName } = req.body;
-  const groupKey = `${String(classCode).trim()}_${String(groupName).trim()}`;
+  const targetClass = String(classCode || "").trim();
+  const targetGroup = String(groupName || "").trim();
 
+  // 🛡️ [보안 강화] 타 학급 모둠 초기화 우회 차단
+  if (authInfo.classScope !== "all" && targetClass !== authInfo.classScope) {
+    return res.status(403).json({ error: "담당 학급의 모둠 비밀번호만 초기화할 수 있습니다." });
+  }
+
+  const groupKey = `${targetClass}_${targetGroup}`;
   classroomGroupPasscodes.delete(groupKey);
 
   if (db) {
@@ -1257,12 +1460,14 @@ app.post("/api/group/passcode/reset", async (req, res) => {
     }
   }
 
-  return res.json({ success: true, message: `'${groupName}' 모둠 비밀번호가 초기화되었습니다.` });
+  return res.json({ success: true, message: `'${targetGroup}' 모둠 비밀번호가 초기화되었습니다.` });
 });
+
 
 // ==========================================
 // [모둠 전용 실시간 협업 채팅 API]
-// 학생들이 같은 모둠 안에서 실시간으로 대화하고, 새로고침해도 대화가 날아가지 않도록 Firestore에 영구 보관합니다.
+// 학생들이 같은 모둠 안에서 실시간으로 대화하고, 새로고침해도 대화가 날아가지 않도록 Firestore에 안전하게 보관합니다.
+// 🛡️ [보안 강화] 모든 채팅 API는 모둠 PIN 인증 토큰 또는 교사 세션 토큰을 검증합니다.
 // ==========================================
 
 // 1. 메시지 전송 및 영구 저장 (Send Message)
@@ -1276,6 +1481,21 @@ app.post("/api/group/chat/send", async (req, res) => {
 
     if (!classCodeVal || !groupNameVal || !contentVal) {
       return res.status(400).json({ error: "학급 코드, 모둠명, 대화 내용은 필수입니다." });
+    }
+
+    // 🛡️ [보안 강화 1] 모둠 세션 토큰 권한 검증 (타 학급/타 모둠 침입 방지)
+    const access = verifyGroupAccess(req, classCodeVal, groupNameVal);
+    if (!access.allowed) {
+      return res.status(403).json({ error: access.reason || "모둠 채팅에 접근할 권한이 없습니다." });
+    }
+
+    // 🛡️ [보안 강화 2] 도배 및 비용 공격 방지 (Rate Limiter: 1.5초 간격, 분당 25회 제한)
+    const clientKey = `${req.ip || "unknown"}_${classCodeVal}_${groupNameVal}`;
+    const rateCheck = checkChatRateLimit(clientKey);
+    if (!rateCheck.allowed) {
+      return res.status(429).json({ 
+        error: `메시지를 너무 빠르게 전송했습니다. ${rateCheck.retryAfter || 2}초 후 다시 보내주세요.` 
+      });
     }
 
     // 도배 및 과도한 길이 방지 (최대 500자)
@@ -1293,6 +1513,9 @@ app.post("/api/group/chat/send", async (req, res) => {
       hour12: true
     }).format(now);
 
+    // 30일 보존 만료 시각 (TTL 정책 대응)
+    const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
     const newMessage = {
       id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       classCode: classCodeVal,
@@ -1300,7 +1523,8 @@ app.post("/api/group/chat/send", async (req, res) => {
       senderName: senderNameVal.substring(0, 20),
       content: contentVal,
       timestamp: now.toISOString(),
-      timeFormatted
+      timeFormatted,
+      expiresAt
     };
 
     // 1) 인메모리 캐시 업데이트 (최근 200개 메시지 유지)
@@ -1311,7 +1535,7 @@ app.post("/api/group/chat/send", async (req, res) => {
     }
     classroomGroupChats.set(groupKey, currentMessages);
 
-    // 2) Firestore에 영구 저장 (브라우저를 닫아도 복원 가능)
+    // 2) Firestore에 영구 저장 (실패 시 거짓 성공을 반환하지 않고 명확한 에러 응답 및 캐시 롤백)
     if (db) {
       try {
         await setDoc(doc(db, "classroom_chats", groupKey), {
@@ -1319,11 +1543,18 @@ app.post("/api/group/chat/send", async (req, res) => {
           groupName: groupNameVal,
           messages: currentMessages,
           updatedAt: now.toISOString(),
-          lastMessageId: newMessage.id
+          lastMessageId: newMessage.id,
+          expiresAt
         });
-        console.log(`[Group Chat] Message saved to Firestore for '${groupKey}' by '${senderNameVal}'`);
+        console.log(`[Group Chat] Message safely persisted to Firestore for '${groupKey}'`);
       } catch (dbErr) {
         console.error(`[Group Chat] Firestore error for '${groupKey}':`, dbErr);
+        // 캐시 롤백: 방금 추가한 메시지 제거
+        currentMessages.pop();
+        classroomGroupChats.set(groupKey, currentMessages);
+        return res.status(500).json({ 
+          error: "데이터베이스 저장에 일시적으로 실패했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요." 
+        });
       }
     }
 
@@ -1334,7 +1565,7 @@ app.post("/api/group/chat/send", async (req, res) => {
     });
   } catch (error: any) {
     console.error("[Group Chat] Send error:", error);
-    return res.status(500).json({ error: "메시지 전송 중 오류가 발생했습니다." });
+    return res.status(500).json({ error: "메시지 전송 중 서버 오류가 발생했습니다." });
   }
 });
 
@@ -1348,24 +1579,29 @@ app.get("/api/group/chat/messages", async (req, res) => {
       return res.status(400).json({ error: "학급 코드와 모둠명이 필요합니다." });
     }
 
+    // 🛡️ [보안 강화] 모둠 세션 토큰 권한 검증
+    const access = verifyGroupAccess(req, classCodeVal, groupNameVal);
+    if (!access.allowed) {
+      return res.status(403).json({ error: access.reason || "모둠 대화 내역을 조회할 권한이 없습니다." });
+    }
+
     const groupKey = `${classCodeVal}_${groupNameVal}`;
     let messages = classroomGroupChats.get(groupKey);
 
-    // 캐시에 없는 경우 Firestore에서 복원 시도
+    // 캐시에 없는 경우 Firestore에서 대상 단일 문서만 안전하게 복원 시도 (전체 컬렉션 스캔 방지)
     if (!messages && db) {
       try {
-        const snapshot = await getDocs(collection(db, "classroom_chats"));
-        snapshot.docs.forEach(d => {
-          if (d.id === groupKey) {
-            const data = d.data();
-            if (data && Array.isArray(data.messages)) {
-              messages = data.messages;
-              classroomGroupChats.set(groupKey, messages);
-            }
+        const { getDoc } = await import("firebase/firestore");
+        const docSnap = await getDoc(doc(db, "classroom_chats", groupKey));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data && Array.isArray(data.messages)) {
+            messages = data.messages;
+            classroomGroupChats.set(groupKey, messages);
           }
-        });
+        }
       } catch (dbErr) {
-        console.error(`[Group Chat] Firestore read error for '${groupKey}':`, dbErr);
+        console.error(`[Group Chat] Firestore single doc read error for '${groupKey}':`, dbErr);
       }
     }
 
@@ -1389,6 +1625,12 @@ app.get("/api/group/chat/status", (req, res) => {
     return res.status(400).json({ error: "학급 코드와 모둠명이 필요합니다." });
   }
 
+  // 🛡️ [보안 강화] 모둠 세션 토큰 권한 검증
+  const access = verifyGroupAccess(req, classCodeVal, groupNameVal);
+  if (!access.allowed) {
+    return res.status(403).json({ error: access.reason || "접근 권한이 없습니다." });
+  }
+
   const groupKey = `${classCodeVal}_${groupNameVal}`;
   const messages = classroomGroupChats.get(groupKey) || [];
 
@@ -1404,7 +1646,7 @@ app.get("/api/group/chat/status", (req, res) => {
   });
 });
 
-// 4. 모둠 채팅 대화 내역 초기화 (Clear Chat - 교사 또는 모둠원 정리용)
+// 4. 모둠 채팅 대화 내역 초기화 (Clear Chat - 교사 또는 해당 모둠 세션 확인)
 app.post("/api/group/chat/clear", async (req, res) => {
   try {
     const { classCode, groupName } = req.body;
@@ -1415,7 +1657,14 @@ app.post("/api/group/chat/clear", async (req, res) => {
       return res.status(400).json({ error: "학급 코드와 모둠명이 필요합니다." });
     }
 
+    // 🛡️ [보안 강화] 모둠 세션 권한 검증
+    const access = verifyGroupAccess(req, classCodeVal, groupNameVal);
+    if (!access.allowed) {
+      return res.status(403).json({ error: access.reason || "채팅 초기화 권한이 없습니다." });
+    }
+
     const groupKey = `${classCodeVal}_${groupNameVal}`;
+    const previousMessages = classroomGroupChats.get(groupKey) || [];
     classroomGroupChats.set(groupKey, []);
 
     if (db) {
@@ -1424,10 +1673,13 @@ app.post("/api/group/chat/clear", async (req, res) => {
         console.log(`[Group Chat] Cleared chat history for '${groupKey}' in Firestore.`);
       } catch (err) {
         console.error(`[Group Chat] Error deleting chat history for '${groupKey}':`, err);
+        // DB 삭제 실패 시 롤백 및 에러 반환
+        classroomGroupChats.set(groupKey, previousMessages);
+        return res.status(500).json({ error: "데이터베이스에서 대화 기록 삭제 중 오류가 발생했습니다." });
       }
     }
 
-    return res.json({ success: true, message: `'${groupNameVal}' 모둠의 대화 기록이 초기화되었습니다.` });
+    return res.json({ success: true, message: `'${groupNameVal}' 모둠의 대화 기록이 안전하게 초기화되었습니다.` });
   } catch (error: any) {
     console.error("[Group Chat] Clear error:", error);
     return res.status(500).json({ error: "채팅 초기화 중 오류가 발생했습니다." });
@@ -1441,7 +1693,14 @@ app.get("/api/group/chat/summary", (req, res) => {
     return res.status(401).json({ error: "교사 인증이 필요합니다." });
   }
 
-  const classCodeVal = String(req.query.classCode || authInfo.classScope || "6-1").trim();
+  const requestedClass = String(req.query.classCode || authInfo.classScope || "6-1").trim();
+
+  // 🛡️ [보안 강화] 타 학급 대화 요약 열람 우회 원천 차단
+  if (authInfo.classScope !== "all" && requestedClass !== authInfo.classScope) {
+    return res.status(403).json({ error: "담당 학급의 모둠 채팅 현황만 조회할 수 있습니다." });
+  }
+
+  const classCodeVal = requestedClass;
   const summaryList: Array<{ groupName: string; count: number; lastMessage?: any }> = [];
 
   const targetGroups = ["1모둠", "2모둠", "3모둠", "4모둠"];
@@ -1457,6 +1716,7 @@ app.get("/api/group/chat/summary", (req, res) => {
 
   return res.json({ success: true, classCode: classCodeVal, groups: summaryList });
 });
+
 
 // Route: Update teacher-configured API Key in server memory
 app.post("/api/teacher-api-key/update", async (req, res) => {

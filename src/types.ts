@@ -127,31 +127,11 @@ export interface GroupWorkspaceData {
   userPassportStamps?: StampData[];
   storyboard: StoryboardScene[];
   boothPlan: OfflineBoothPlan;
-  studentResearch: {
-    food: string;
-    greeting: string;
-    costume: string;
-    festival: string;
-  };
-  resolution: {
-    sponsorCountry: string;
-    resolutionNumber: string;
-    title: string;
-    preamble: string;
-  };
+  studentResearch: any;
+  resolution: any;
   operativeClauses: string[];
-  campaignInput: {
-    title: string;
-    slogan: string;
-    actionItem1: string;
-    actionItem2: string;
-  };
-  citizenOath: {
-    studentName: string;
-    pledge1: string;
-    pledge2: string;
-    pledge3: string;
-  };
+  campaignInput: any;
+  citizenOath: any;
   signedOath: boolean;
   videoUrl: string;
   materials?: BoothMaterialItem[];
@@ -159,6 +139,7 @@ export interface GroupWorkspaceData {
   updatedAt: string;
   lastAuthor?: string;
 }
+
 
 /**
  * 준비물 신청 오픈마켓 타입
