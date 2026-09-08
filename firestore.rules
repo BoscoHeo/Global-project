@@ -2,10 +2,37 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // 🔒 [보안 강화] 모든 클라이언트의 Firestore 직접 읽기/쓰기 차단
-    // 우리 애플리케이션의 모든 데이터(학급 암호, 포트폴리오, 모둠 PIN, 실시간 채팅 등)는
-    // 백엔드 Express 서버(Node.js)를 통해서만 안전하게 인증 및 검증 후 입출력됩니다.
-    // 브라우저 클라이언트가 Firebase 환경 설정값을 악용하여 직접 DB를 열람/변조/삭제하는 것을 전면 차단합니다.
+    // 1. Passcodes for classroom validation
+    match /classroom_passcodes/{classCode} {
+      allow read, write: if classCode is string && classCode.size() > 0 && classCode.size() <= 64;
+    }
+    
+    // 2. Student portfolio entries
+    match /classroom_portfolios/{portfolioId} {
+      allow read, write: if portfolioId is string && portfolioId.size() > 0 && portfolioId.size() <= 128;
+    }
+    
+    // 3. Continent / Activity status
+    match /classroom_continents/{classCode} {
+      allow read, write: if classCode is string && classCode.size() > 0 && classCode.size() <= 64;
+    }
+    
+    // 4. Group Real-time Collaboration Workspaces
+    match /classroom_groups/{groupKey} {
+      allow read, write: if groupKey is string && groupKey.size() > 0 && groupKey.size() <= 128;
+    }
+    
+    // 5. Group Passcodes (PIN access control)
+    match /classroom_group_passcodes/{groupKey} {
+      allow read, write: if groupKey is string && groupKey.size() > 0 && groupKey.size() <= 128;
+    }
+    
+    // 6. Group Real-time Chat
+    match /classroom_chats/{chatKey} {
+      allow read, write: if chatKey is string && chatKey.size() > 0 && chatKey.size() <= 128;
+    }
+    
+    // 7. Default Deny - block any arbitrary collections and root documents
     match /{document=**} {
       allow read, write: if false;
     }
