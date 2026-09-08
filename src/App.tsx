@@ -1937,11 +1937,14 @@ export default function App() {
     } catch (_) {}
   };
 
-  // 🛡️ [보안 강화] 모둠 채팅 API 호출용 토큰 헤더 헬퍼
+  // 🛡️ [보안 강화 & 자동 복원] 모둠 채팅 API 호출용 토큰 헤더 헬퍼
   const getChatHeaders = (): Record<string, string> => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     const curGroupToken = groupToken || sessionStorage.getItem(`group_token_${classCode}_${groupName}`) || "";
     if (curGroupToken) headers["x-group-token"] = curGroupToken;
+    const groupKey = `${classCode}_${groupName}`;
+    const savedPin = localStorage.getItem(`group_pin_${groupKey}`) || "";
+    if (savedPin) headers["x-group-pin"] = savedPin;
     const curTeacherToken = teacherToken || sessionStorage.getItem("teacher_token") || currentPasscode || sessionStorage.getItem("teacher_passcode") || "";
     if (curTeacherToken) headers["Authorization"] = `Bearer ${curTeacherToken}`;
     return headers;
@@ -1998,8 +2001,46 @@ export default function App() {
           setChatLastMsgId(data.message.id);
           setChatInputText("");
         }
+      } else if (res.status === 401 || res.status === 403) {
+        // 💡 [토큰 만료 자동 치유] 서버 재시작 등으로 토큰이 만료된 경우 저장된 PIN으로 백그라운드 재인증 후 재전송 시도
+        const groupKey = `${classCode}_${groupName}`;
+        const savedPin = localStorage.getItem(`group_pin_${groupKey}`) || "";
+        if (savedPin) {
+          try {
+            const reauthRes = await fetch("/api/group/passcode/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ classCode, groupName, passcode: savedPin })
+            });
+            const reauthData = await reauthRes.json();
+            if (reauthData.token) {
+              setGroupToken(reauthData.token);
+              try { sessionStorage.setItem(`group_token_${groupKey}`, reauthData.token); } catch (_) {}
+              // 새 토큰으로 즉시 재전송
+              const retryRes = await fetch("/api/group/chat/send", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-group-token": reauthData.token,
+                  "x-group-pin": savedPin
+                },
+                body: JSON.stringify({ classCode, groupName, senderName: sender, content })
+              });
+              if (retryRes.ok) {
+                const retryData = await retryRes.json();
+                if (retryData.message) {
+                  setChatMessages(prev => [...prev.filter(m => m.id !== retryData.message.id), retryData.message]);
+                  setChatLastMsgId(retryData.message.id);
+                  setChatInputText("");
+                  return;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+        setShowGroupPasscodeModal(true);
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         alert(err.error || "메시지 전송에 실패했습니다.");
       }
     } catch (err) {

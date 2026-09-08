@@ -520,9 +520,9 @@ const classroomGroupPasscodes = new Map<string, string>();
 const classroomGroupChats = new Map<string, any[]>();
 
 // 🔐 [보안 강화] 서버 서명 시크릿 및 기본 마스터 비밀번호 설정
-// 환경 변수(TEACHER_MASTER_PASSCODE, SERVER_AUTH_SECRET)가 제공되면 우선 적용됩니다.
+// 서버가 재배포되더라도 학생 브라우저의 서명 토큰이 무효화되지 않도록 안정적인 고정 솔트를 기본 적용합니다.
 const DEFAULT_MASTER_PASSCODE = process.env.TEACHER_MASTER_PASSCODE || "8900";
-const SERVER_AUTH_SECRET = process.env.SERVER_AUTH_SECRET || crypto.randomBytes(32).toString("hex");
+const SERVER_AUTH_SECRET = process.env.SERVER_AUTH_SECRET || "world-cultures-portal-2026-auth-secure-secret-key-salt-98a";
 
 // Class-specific passcode storage (acts as local cache/fallback)
 const classroomPasscodes = new Map<string, string>([
@@ -595,34 +595,45 @@ export function checkChatRateLimit(clientKey: string): { allowed: boolean; retry
   return { allowed: true };
 }
 
-// 🛡️ [보안 강화] 모둠 접근 권한(PIN 세션) 검증 헬퍼
+// 🛡️ [보안 강화] 모둠 접근 권한(PIN 세션) 검증 헬퍼 (토큰 + PIN 듀얼 자동 복원)
 export function verifyGroupAccess(req: express.Request, targetClass: string, targetGroup: string): { allowed: boolean; reason?: string; role?: string } {
   const token = (req.headers["x-group-token"] as string) || 
                 (req.headers["authorization"]?.startsWith("Bearer ") ? req.headers["authorization"].substring(7).trim() : "");
-                
-  if (!token) {
-    return { allowed: false, reason: "모둠 세션 인증 토큰이 필요합니다. 먼저 모둠 PIN을 인증해 주세요." };
+  const clientPin = (req.headers["x-group-pin"] as string) || "";
+  const groupKey = `${targetClass}_${targetGroup}`;
+  const savedPasscode = classroomGroupPasscodes.get(groupKey);
+
+  // 1) 서명 토큰 검증
+  if (token) {
+    const payload = verifyAuthToken(token);
+    if (payload) {
+      if (payload.role === "teacher") {
+        if (payload.classScope === "all" || payload.classScope === targetClass) {
+          return { allowed: true, role: "teacher" };
+        }
+      } else if (payload.classCode === targetClass && payload.groupName === targetGroup) {
+        return { allowed: true, role: "student" };
+      }
+    }
   }
 
-  const payload = verifyAuthToken(token);
-  if (!payload) {
-    return { allowed: false, reason: "인증 토큰이 유효하지 않거나 만료되었습니다. 모둠에 다시 입장해 주세요." };
-  }
-
-  // 교사인 경우: 학급 범위(Scope) 검증
-  if (payload.role === "teacher") {
-    if (payload.classScope === "all" || payload.classScope === targetClass) {
+  // 2) 💡 [수업 무중단 자동 복원] 토큰이 재시작 등으로 만료/유실되었더라도,
+  // 클라이언트가 저장된 모둠 PIN을 보유하고 있거나 아직 비밀번호가 없는 모둠이면 즉시 허용
+  if (clientPin) {
+    if (clientPin === getMasterPasscode()) {
       return { allowed: true, role: "teacher" };
     }
-    return { allowed: false, reason: "담당 학급 외의 모둠 데이터에는 접근할 수 없습니다." };
+    if (savedPasscode && clientPin === savedPasscode) {
+      return { allowed: true, role: "student" };
+    }
   }
 
-  // 학생인 경우: 해당 학급 및 모둠과 정확히 일치해야 함
-  if (payload.classCode === targetClass && payload.groupName === targetGroup) {
+  // 모둠 비밀번호가 아직 설정되지 않은 초기 모둠인 경우 허용
+  if (!savedPasscode) {
     return { allowed: true, role: "student" };
   }
 
-  return { allowed: false, reason: "다른 학급이나 다른 모둠의 채팅 데이터에는 접근할 수 없습니다." };
+  return { allowed: false, reason: "인증 토큰이 유효하지 않거나 만료되었습니다. 모둠에 다시 입장해 주세요." };
 }
 
 // Class-specific assigned continent storage (acts as local cache/fallback)
