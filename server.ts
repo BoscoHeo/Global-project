@@ -84,36 +84,47 @@ try {
   console.error("[Firebase] Initialization error:", err);
 }
 
+// Firestore Target Project & Database ID 설정 (환경변수 우선, 기본값 fallback)
+// credential 비밀키는 코드에 일체 포함하지 않으며, 타겟 리소스 식별자(프로젝트/DB명)만 안전하게 명시합니다.
+const adminTargetProjectId = process.env.FIREBASE_PROJECT_ID?.trim() || "project-e9661680-15e4-4f40-b06";
+const adminTargetDatabaseId = process.env.FIREBASE_DATABASE_ID?.trim() || "ai-studio-384c9920-4239-4232-8bce-f279edb7761e";
+
 // Initialize Firebase Admin SDK exclusively for privileged teacher_api_keys operations
+// App Hosting 운영 환경에서는 Cross-project IAM + applicationDefault()를 기본 경로로 사용합니다.
 let adminDb: AdminFirestore | null = null;
 try {
   if (!getAdminApps().length) {
     if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
       const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
       initAdminApp({
-        credential: cert(serviceAccount)
+        credential: cert(serviceAccount),
+        projectId: adminTargetProjectId
       });
-      console.log("[Firebase Admin] Initialized Admin SDK successfully via FIREBASE_SERVICE_ACCOUNT_KEY.");
+      console.log(`[Firebase Admin] Initialized Admin SDK via FIREBASE_SERVICE_ACCOUNT_KEY for target project: ${adminTargetProjectId}`);
     } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       initAdminApp({
-        credential: applicationDefault()
+        credential: applicationDefault(),
+        projectId: adminTargetProjectId
       });
-      console.log("[Firebase Admin] Initialized Admin SDK successfully via GOOGLE_APPLICATION_CREDENTIALS.");
+      console.log(`[Firebase Admin] Initialized Admin SDK via GOOGLE_APPLICATION_CREDENTIALS for target project: ${adminTargetProjectId}`);
     } else {
-      // Attempt Application Default Credentials (e.g., Cloud Run / GCP metadata server)
+      // App Hosting 운영 기본 경로: Cross-project IAM + Application Default Credentials
       try {
         initAdminApp({
-          credential: applicationDefault()
+          credential: applicationDefault(),
+          projectId: adminTargetProjectId
         });
-        console.log("[Firebase Admin] Initialized Admin SDK successfully via Cloud Application Default Credentials.");
-      } catch {
-        console.warn("[Firebase Admin] No Admin credentials found (neither FIREBASE_SERVICE_ACCOUNT_KEY nor GOOGLE_APPLICATION_CREDENTIALS / Cloud ADC).");
+        console.log(`[Firebase Admin] Initialized Admin SDK via Cloud Application Default Credentials for target project: ${adminTargetProjectId}`);
+      } catch (adcErr) {
+        console.warn("[Firebase Admin] No Admin credentials found (neither FIREBASE_SERVICE_ACCOUNT_KEY nor Cloud ADC):", adcErr);
       }
     }
   }
-  if (getAdminApps().length) {
-    adminDb = getAdminFirestore();
-    console.log("[Firebase Admin] Admin Firestore initialized successfully.");
+
+  const adminApp = getAdminApps()[0];
+  if (adminApp) {
+    adminDb = getAdminFirestore(adminApp, adminTargetDatabaseId);
+    console.log(`[Firebase Admin] Admin Firestore initialized successfully for database: ${adminTargetDatabaseId} (project: ${adminTargetProjectId}).`);
   } else {
     console.warn("[Firebase Admin] Admin Firestore disabled: Admin credentials not configured.");
   }
