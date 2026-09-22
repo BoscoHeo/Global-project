@@ -8834,7 +8834,7 @@ ${clausesCombined}`
                   }}
                   className="space-y-3 pt-2"
                 >
-                  <label className="text-[11px] font-black uppercase text-slate-500 block">🔑 교사용 기밀 보증 패스코드 (기본: 8900)</label>
+                  <label className="text-[11px] font-black uppercase text-slate-500 block">🔑 교사용 기밀 보증 패스코드</label>
                   <div className="flex gap-2">
                     <input 
                       type="password"

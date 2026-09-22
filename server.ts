@@ -9,14 +9,17 @@ import { initializeApp } from "firebase/app";
 import { 
   initializeFirestore, 
   collection, 
-  doc, 
-  getDocs, 
-  setDoc, 
-  deleteDoc, 
+  doc,
+  getDocs,
+  setDoc,
+  deleteDoc,
   writeBatch,
   Firestore,
   setLogLevel
 } from "firebase/firestore";
+import { initializeApp as initAdminApp, cert, applicationDefault, getApps as getAdminApps } from "firebase-admin/app";
+import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
+import type { Firestore as AdminFirestore } from "firebase-admin/firestore";
 
 dotenv.config();
 
@@ -79,6 +82,44 @@ try {
   }
 } catch (err) {
   console.error("[Firebase] Initialization error:", err);
+}
+
+// Initialize Firebase Admin SDK exclusively for privileged teacher_api_keys operations
+let adminDb: AdminFirestore | null = null;
+try {
+  if (!getAdminApps().length) {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+      initAdminApp({
+        credential: cert(serviceAccount)
+      });
+      console.log("[Firebase Admin] Initialized Admin SDK successfully via FIREBASE_SERVICE_ACCOUNT_KEY.");
+    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      initAdminApp({
+        credential: applicationDefault()
+      });
+      console.log("[Firebase Admin] Initialized Admin SDK successfully via GOOGLE_APPLICATION_CREDENTIALS.");
+    } else {
+      // Attempt Application Default Credentials (e.g., Cloud Run / GCP metadata server)
+      try {
+        initAdminApp({
+          credential: applicationDefault()
+        });
+        console.log("[Firebase Admin] Initialized Admin SDK successfully via Cloud Application Default Credentials.");
+      } catch {
+        console.warn("[Firebase Admin] No Admin credentials found (neither FIREBASE_SERVICE_ACCOUNT_KEY nor GOOGLE_APPLICATION_CREDENTIALS / Cloud ADC).");
+      }
+    }
+  }
+  if (getAdminApps().length) {
+    adminDb = getAdminFirestore();
+    console.log("[Firebase Admin] Admin Firestore initialized successfully.");
+  } else {
+    console.warn("[Firebase Admin] Admin Firestore disabled: Admin credentials not configured.");
+  }
+} catch (adminErr) {
+  console.warn("[Firebase Admin] Failed to initialize Firebase Admin SDK:", adminErr);
+  adminDb = null;
 }
 
 // Dynamic Gemini client setup, supporting optional runtime user-provided keys from Request headers
@@ -519,19 +560,52 @@ const classroomGroupPasscodes = new Map<string, string>();
 // 모둠원 간 실시간 채팅 메시지 저장소 (인메모리 캐시 및 Firestore 연동: key = `${classCode}_${groupName}`)
 const classroomGroupChats = new Map<string, any[]>();
 
-// 🔐 [보안 강화] 서버 서명 시크릿 및 기본 마스터 비밀번호 설정
-// 서버가 재배포되더라도 학생 브라우저의 서명 토큰이 무효화되지 않도록 안정적인 고정 솔트를 기본 적용합니다.
-const DEFAULT_MASTER_PASSCODE = process.env.TEACHER_MASTER_PASSCODE || "8900";
-const SERVER_AUTH_SECRET = process.env.SERVER_AUTH_SECRET || "world-cultures-portal-2026-auth-secure-secret-key-salt-98a";
+// 🔐 [보안 강화] 서버 서명 시크릿 설정
+// 하드코딩된 기본 시크릿을 원천 제거하고, 환경별 보안 정책을 적용합니다.
+const isProduction = process.env.NODE_ENV === "production";
+const rawAuthSecret = process.env.SERVER_AUTH_SECRET?.trim();
 
-// Class-specific passcode storage (acts as local cache/fallback)
-const classroomPasscodes = new Map<string, string>([
-  ["master", DEFAULT_MASTER_PASSCODE]
-]);
+let SERVER_AUTH_SECRET: string;
+if (isProduction) {
+  if (!rawAuthSecret || rawAuthSecret.length < 32) {
+    console.error("[FATAL SECURITY] SERVER_AUTH_SECRET must be set and at least 32 characters long in production mode.");
+    throw new Error("SERVER_AUTH_SECRET environment variable is required and must be at least 32 characters in production.");
+  }
+  SERVER_AUTH_SECRET = rawAuthSecret;
+} else {
+  if (rawAuthSecret && rawAuthSecret.length >= 32) {
+    SERVER_AUTH_SECRET = rawAuthSecret;
+  } else {
+    // 비프로덕션(개발/테스트) 환경: 32바이트(256비트) 암호학적 무작위 에페머럴 시크릿 자동 생성
+    SERVER_AUTH_SECRET = crypto.randomBytes(32).toString("hex");
+    console.warn("[Security Warning] SERVER_AUTH_SECRET is not set or shorter than 32 characters. Generated an ephemeral secret for development. Tokens will be invalidated upon server restart.");
+  }
+}
 
-// 교사 마스터 비밀번호 헬퍼
-function getMasterPasscode(): string {
-  return classroomPasscodes.get("master") || process.env.TEACHER_MASTER_PASSCODE || DEFAULT_MASTER_PASSCODE;
+// Class-specific passcode storage (acts as local cache/fallback for custom class PINs only)
+// 마스터 비밀번호는 인메모리 맵에 보관하지 않으며, Firestore master 문서도 절대 적재하지 않습니다.
+const classroomPasscodes = new Map<string, string>();
+
+// 교사 마스터 비밀번호 헬퍼 (환경변수 TEACHER_MASTER_PASSCODE 단일 원천 검증, 최소 12자 이상 필수)
+function getMasterPasscode(): string | null {
+  const envMaster = process.env.TEACHER_MASTER_PASSCODE?.trim();
+  if (!envMaster) {
+    return null;
+  }
+  if (envMaster.length < 12) {
+    return null;
+  }
+  return envMaster;
+}
+
+// 마스터 비밀번호 설정 상태 진단 로그 (비밀번호 값 자체는 절대 출력하지 않음)
+const initialMasterPasscode = process.env.TEACHER_MASTER_PASSCODE?.trim();
+if (!initialMasterPasscode) {
+  console.warn("[Security Notice] TEACHER_MASTER_PASSCODE is not configured. Master teacher authentication is disabled (Fail-Closed).");
+} else if (initialMasterPasscode.length < 12) {
+  console.warn("[Security Warning] TEACHER_MASTER_PASSCODE must be at least 12 characters long. Current value is too short; master teacher authentication is disabled.");
+} else {
+  console.log("[Security] Master teacher authentication is configured and active.");
 }
 
 // 🛡️ [보안 강화] 서명된 세션 토큰 페이로드 인터페이스
@@ -620,7 +694,8 @@ export function verifyGroupAccess(req: express.Request, targetClass: string, tar
   // 2) 💡 [수업 무중단 자동 복원] 토큰이 재시작 등으로 만료/유실되었더라도,
   // 클라이언트가 저장된 모둠 PIN을 보유하고 있거나 아직 비밀번호가 없는 모둠이면 즉시 허용
   if (clientPin) {
-    if (clientPin === getMasterPasscode()) {
+    const masterPass = getMasterPasscode();
+    if (masterPass && clientPin === masterPass) {
       return { allowed: true, role: "teacher" };
     }
     if (savedPasscode && clientPin === savedPasscode) {
@@ -653,25 +728,38 @@ async function syncFromFirestore() {
   try {
     console.log("[Firebase] Syncing database configurations from Firestore on startup...");
     
-    // 1. Sync Teacher API Keys
-    const keysSnapshot = await getDocs(collection(db, "teacher_api_keys"));
-    keysSnapshot.forEach(doc => {
-      const data = doc.data();
-      if (data && data.apiKey) {
-        classTeacherApiKeys[doc.id] = data.apiKey;
+    // 1. Sync Teacher API Keys (Using Admin SDK exclusively for security)
+    if (adminDb) {
+      try {
+        const keysSnapshot = await adminDb.collection("teacher_api_keys").get();
+        keysSnapshot.forEach(doc => {
+          const data = doc.data();
+          if (data && data.apiKey) {
+            classTeacherApiKeys[doc.id] = data.apiKey;
+          }
+        });
+        console.log(`[Firebase Admin] Loaded ${keysSnapshot.size} teacher API keys from Firestore.`);
+      } catch (adminErr) {
+        console.error("[Firebase Admin] Failed to load teacher API keys from Admin Firestore:", adminErr);
       }
-    });
-    console.log(`[Firebase] Loaded ${keysSnapshot.size} teacher API keys from Firestore.`);
+    } else {
+      console.warn("[Firebase Admin] Skipping teacher API keys sync: Admin credentials not configured.");
+    }
 
-    // 2. Sync Classroom Passcodes
+    // 2. Sync Classroom Passcodes (개별 학급 코드만 적재하며, legacy 'master' 문서는 절대 적재하지 않음)
     const passcodesSnapshot = await getDocs(collection(db, "classroom_passcodes"));
+    let loadedPasscodeCount = 0;
     passcodesSnapshot.forEach(doc => {
+      if (doc.id.toLowerCase() === "master") {
+        return; // legacy master Firestore 문서는 마스터 인증에 사용하지 않으므로 무시
+      }
       const data = doc.data();
       if (data && data.passcode) {
-        classroomPasscodes.set(doc.id, data.passcode);
+        classroomPasscodes.set(doc.id, String(data.passcode));
+        loadedPasscodeCount++;
       }
     });
-    console.log(`[Firebase] Loaded ${passcodesSnapshot.size} classroom passcodes from Firestore.`);
+    console.log(`[Firebase] Loaded ${loadedPasscodeCount} classroom passcodes from Firestore (legacy master ignored).`);
 
     // 3. Sync Classroom Continents
     const continentsSnapshot = await getDocs(collection(db, "classroom_continents"));
@@ -758,7 +846,7 @@ function getAuthorizedClassCode(req: express.Request): { authorized: boolean; cl
   }
   
   const masterPass = getMasterPasscode();
-  if (passcode === masterPass) {
+  if (masterPass && passcode === masterPass) {
     return { authorized: true, classScope: "all", role: "teacher" };
   }
   
@@ -787,7 +875,7 @@ app.post("/api/teacher/login", (req, res) => {
   }
 
   const masterPass = getMasterPasscode();
-  if (inputPass === masterPass) {
+  if (masterPass && inputPass === masterPass) {
     const token = generateAuthToken({
       role: "teacher",
       classScope: "all",
@@ -825,9 +913,9 @@ app.get("/api/class-passcode/list", (req, res) => {
   if (!verifyPasscode(req, true)) {
     return res.status(401).json({ error: "접근 권한이 없습니다. 마스터 교사 비밀번호가 필요합니다." });
   }
-  // 보안: 마스터 비밀번호 평문 대신 마스터 설정 여부만 불리언으로 전달하거나 안전 처리
+  // 보안: 마스터 비밀번호 평문 대신 마스터 설정 여부만 불리언으로 전달
   res.json({
-    masterSet: true,
+    masterSet: getMasterPasscode() !== null,
     custom: Object.fromEntries(classroomPasscodes.entries())
   });
 });
@@ -840,11 +928,21 @@ app.post("/api/class-passcode/save", async (req, res) => {
   }
 
   const { classCode, passcode } = req.body;
-  if (!passcode || passcode.trim().length === 0) {
+  if (!classCode || typeof classCode !== "string" || classCode.trim().length === 0) {
+    return res.status(400).json({ error: "학급 코드를 올바르게 입력해 주십시오." });
+  }
+  if (!passcode || typeof passcode !== "string" || passcode.trim().length === 0) {
     return res.status(400).json({ error: "올바른 암호를 기입하십시오." });
   }
-  const trimmedCode = (classCode || "master").trim();
+  const trimmedCode = classCode.trim();
   const trimmedPasscode = passcode.trim();
+
+  // 마스터 비밀번호는 환경변수 단일 원천으로만 관리되므로 API 저장 차단 (Fail-Closed)
+  if (trimmedCode.toLowerCase() === "master") {
+    return res.status(400).json({
+      error: "마스터 비밀번호는 서버 환경변수(TEACHER_MASTER_PASSCODE)로만 관리되며, API를 통해 저장하거나 수정할 수 없습니다."
+    });
+  }
 
   // Regex and size guard for code and passcode parameters
   if (!/^[a-zA-Z0-9_\-]+$/.test(trimmedCode) || trimmedCode.length > 20) {
@@ -856,7 +954,7 @@ app.post("/api/class-passcode/save", async (req, res) => {
 
   // Update in-memory fallback cache
   classroomPasscodes.set(trimmedCode, trimmedPasscode);
-  console.log(`[Security] Passcode for '${trimmedCode}' updated to '${trimmedPasscode}'`);
+  console.log(`[Security] Passcode for class '${trimmedCode}' updated successfully.`);
 
   // Persist in Firebase Firestore
   if (db) {
@@ -882,7 +980,7 @@ app.post("/api/class-passcode/verify", (req, res) => {
 
   // 1. Check master passcode
   const masterPass = getMasterPasscode();
-  if (trimmedPasscode === masterPass) {
+  if (masterPass && trimmedPasscode === masterPass) {
     const token = generateAuthToken({
       role: "teacher",
       classScope: "all",
@@ -1306,7 +1404,8 @@ app.post("/api/group/passcode/verify", (req, res) => {
   }
 
   // 교사 마스터 비밀번호 입력 시 마스터 패스 허용 및 교사 토큰 발급
-  if (inputPasscode === getMasterPasscode()) {
+  const masterPass = getMasterPasscode();
+  if (masterPass && inputPasscode === masterPass) {
     const token = generateAuthToken({
       role: "teacher",
       classScope: "all",
@@ -1357,7 +1456,9 @@ app.post("/api/group/passcode/set", async (req, res) => {
     // 이미 비밀번호가 설정되어 있는 경우, 이전 비번이나 교사 마스터 비번 검증
     if (existingPasscode) {
       const cur = String(currentPasscode || "").trim();
-      if (cur !== existingPasscode && cur !== getMasterPasscode()) {
+      const masterPass = getMasterPasscode();
+      const isMasterValid = masterPass && cur === masterPass;
+      if (cur !== existingPasscode && !isMasterValid) {
         return res.status(403).json({ error: "기존 비밀번호가 일치하지 않아 변경할 수 없습니다." });
       }
     }
@@ -1723,7 +1824,7 @@ app.get("/api/group/chat/summary", (req, res) => {
 });
 
 
-// Route: Update teacher-configured API Key in server memory
+// Route: Update teacher-configured API Key in server memory & Admin Firestore
 app.post("/api/teacher-api-key/update", async (req, res) => {
   const authInfo = getAuthorizedClassCode(req);
   if (!authInfo.authorized) {
@@ -1738,7 +1839,42 @@ app.post("/api/teacher-api-key/update", async (req, res) => {
     return res.status(403).json({ error: "지정된 학급의 설정 권한이 없습니다." });
   }
 
-  const trimmed = (apiKey || "").trim();
+  // Master scope requires explicitly configured TEACHER_MASTER_PASSCODE
+  if (authInfo.classScope === "all" && !process.env.TEACHER_MASTER_PASSCODE?.trim()) {
+    return res.status(403).json({ error: "운영용 TEACHER_MASTER_PASSCODE 환경 변수가 설정되지 않아 마스터 권한 작업을 수행할 수 없습니다." });
+  }
+
+  // Input validation: empty string = delete request, otherwise validate length/whitespace
+  const trimmed = String(apiKey || "").trim();
+  if (trimmed) {
+    if (trimmed.length < 20 || trimmed.length > 100 || /\s/.test(trimmed)) {
+      return res.status(400).json({ error: "API Key 형식이 올바르지 않습니다. (공백 없이 20~100자)" });
+    }
+  }
+
+  // Admin SDK must be configured for persisting teacher API keys
+  if (!adminDb) {
+    console.error("[Firebase Admin] teacher-api-key update rejected: Admin credentials not configured.");
+    return res.status(503).json({
+      error: "Firebase Admin 자격 증명이 설정되지 않아 API Key를 영속 저장할 수 없습니다."
+    });
+  }
+
+  // Persist to Admin Firestore FIRST
+  try {
+    const docRef = adminDb.collection("teacher_api_keys").doc(targetClass);
+    if (trimmed) {
+      await docRef.set({ apiKey: trimmed });
+    } else {
+      await docRef.delete();
+    }
+    console.log(`[Firebase Admin] Persisted teacher API Key for '${targetClass}' in Firestore.`);
+  } catch (err) {
+    console.error("[Firebase Admin] Error updating teacher API Key in Admin Firestore:", err);
+    return res.status(500).json({ error: "Firestore 영속 저장 중 오류가 발생했습니다." });
+  }
+
+  // Update in-memory cache ONLY AFTER successful Firestore persistence
   if (trimmed) {
     classTeacherApiKeys[targetClass] = trimmed;
   } else {
@@ -1746,28 +1882,14 @@ app.post("/api/teacher-api-key/update", async (req, res) => {
   }
   console.log(`[Server API Key] Saved key for class [${targetClass}]: ${trimmed ? "ACTIVE" : "CLEARED"}`);
 
-  if (db) {
-    try {
-      const docRef = doc(db, "teacher_api_keys", targetClass);
-      if (trimmed) {
-        await setDoc(docRef, { apiKey: trimmed });
-      } else {
-        await deleteDoc(docRef);
-      }
-      console.log(`[Firebase] Updated teacher API Key for '${targetClass}' in Firestore.`);
-    } catch (err) {
-      console.error("[Firebase] Error updating teacher API Key in Firestore:", err);
-    }
-  }
-
   res.json({ success: true, hasKey: !!classTeacherApiKeys[targetClass], classCode: targetClass });
 });
 
-// Route: Get teacher API Key status
+// Route: Get teacher API Key status (Minimal metadata response)
 app.get("/api/teacher-api-key/status", (req, res) => {
   const classCode = ((req.query.classCode as string) || "all").trim();
   const hasKey = !!classTeacherApiKeys[classCode] || !!classTeacherApiKeys["all"];
-  res.json({ hasKey, keysCount: Object.keys(classTeacherApiKeys).length });
+  res.json({ hasKey });
 });
 
 // Configure Vite integration or bundle

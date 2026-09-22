@@ -32,9 +32,9 @@ service cloud.firestore {
       allow read, write: if chatKey is string && chatKey.size() > 0 && chatKey.size() <= 128;
     }
     
-    // 7. Teacher API Keys (Classroom AI settings)
+    // 7. Teacher API Keys (Classroom AI settings) - Block all client SDK access
     match /teacher_api_keys/{classCode} {
-      allow read, write: if classCode is string && classCode.size() > 0 && classCode.size() <= 64;
+      allow read, write: if false;
     }
     
     // 8. Default Deny - block any arbitrary collections and root documents
